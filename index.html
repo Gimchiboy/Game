@@ -360,6 +360,17 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .tk-sw{width:30px;height:30px;border-radius:50%;border:1px solid rgba(0,0,0,.18);position:relative;padding:0}
 .tk-sw i{position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;border:2px solid var(--lcd-2)}
 .kicker .cat,.kicker .tg{color:inherit}
+
+.macros{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.macros div{display:flex;flex-direction:column;gap:2px}
+.macros b{font:var(--head-weight) 20px var(--head)}
+.macros span{font-size:11.5px;color:var(--muted)}
+.mbar{display:flex;gap:2px;height:8px;border-radius:999px;overflow:hidden;margin-top:12px}
+.mbar i{display:block;height:100%;background:var(--ink)}
+.mbar i:nth-child(2){opacity:.55}
+.mbar i:nth-child(3){opacity:.28}
+.srcs{margin:0;padding:12px 16px 12px 32px;display:grid;gap:8px;font-size:13px;color:var(--ink)}
+.srcs a{color:var(--ink)!important}
 </style>
 </head>
 <body>
@@ -576,6 +587,7 @@ const ICON = {"today": "<path d=\"M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 
 Object.assign(ICON, {
   reel:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9h17M7 5l2 4M12 5l2 4M17 5l2 4"/>',
   circulate:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>',
+  food:'<path d="M7 3v8a3 3 0 0 0 3 3v7M7 3v5M10 3v5M17 3c-2 2-2.5 5-2.5 8h2.5v10"/>',
   goals:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>'
 });
 /* ---------- navigation ---------- */
@@ -584,6 +596,7 @@ const APPS = [
   {k:"tasks", n:"Tasks", stat: () => { const n = all("task").filter(t => !t.done).length; return n ? `${n} open` : "All clear"; }},
   {k:"calendar", n:"Calendar", stat: () => { const t = today(); for (let i = 0; i < 30; i++){ const d = addDays(t, i), ev = eventsFor(d).filter(e => e.dayN === 0); if (ev.length) return `Next: ${ev[0].title}`; } return "Nothing ahead"; }},
   {k:"goals", n:"Goals", stat: () => { const n = all("goal").filter(g => !g.archived).length; return n ? `${n} in progress` : "Set one"; }},
+  {k:"food", n:"Food", stat: () => { const r = foodCalc(); return r ? `${r.target.toLocaleString()} cal a day` : "Calories & macros"; }},
   {k:"notes", n:"Notes", stat: () => { const n = all("note").length; return `${n} note${n===1?"":"s"}`; }},
   {k:"journal", n:"Journal", stat: () => { const n = all("journal").filter(j => (j.body||"").trim()).length; return `${n} entr${n===1?"y":"ies"}`; }},
   {k:"trends", n:"Trends", stat: () => "Graphs of your dailies"},
@@ -615,6 +628,7 @@ let calView = "month";
 let evQuery = "";
 let agendaDays = 14;
 let catFilter = "all";     // calendar & tasks: all | work | life
+let goalOpen = null;
 let bodyRange = 7;
 route((location.hash || "").slice(1));
 const PAL = ["#2a78d6","#eb6834","#1baf7a","#eda100","#e87ba4","#008300","#6250d6","#e34948"];
@@ -988,7 +1002,6 @@ function wireCharts(){
 }
 
 /* ---------- Goals ---------- */
-let goalOpen = null;
 const GTYPES = {value: "Reach a number", sum: "Add up to a total", milestones: "Milestones", reel: "Reel project"};
 const clamp01 = v => Math.max(0, Math.min(1, v));
 function fmtV(v, unit){ if (v == null || isNaN(v)) return "—"; const n = Math.round(v * 100) / 100; if (unit === "$") return (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString(undefined, {maximumFractionDigits: 2}); return `${n.toLocaleString(undefined, {maximumFractionDigits: 2})}${unit ? " " + unit : ""}`; }
@@ -1151,6 +1164,91 @@ function goalSheet(id){
     sync();
     (P.type === "value" || P.type === "sum" ? S.querySelector(P.type === "value" && !P.start ? "[name=start]" : "[name=target]") : S.querySelector("[name=title]")).focus();
   });
+}
+
+/* ---------- Food: calorie & macro needs ---------- */
+const ACT = [
+  ["1.2", "Sedentary", "Desk job, little or no exercise"],
+  ["1.375", "Lightly active", "Light exercise 1–3 days a week"],
+  ["1.55", "Moderately active", "Moderate exercise 3–5 days a week"],
+  ["1.725", "Very active", "Hard exercise 6–7 days a week"],
+  ["1.9", "Extremely active", "Physical job plus hard training"],
+];
+const GOALS = [["lose1", "Lose 1 lb/week", -500], ["lose05", "Lose ½ lb/week", -250], ["keep", "Maintain", 0], ["gain05", "Gain ½ lb/week", 250]];
+function foodCfg(){ const f = (items.settings || {}).food || {}; return {sex: f.sex || "", age: f.age || "", ft: f.ft ?? "", inch: f.inch ?? "", act: f.act || "1.375", goal: f.goal || "keep", pro: f.pro || 1.6}; }
+function saveFood(p){ saveCfg({food: {...foodCfg(), ...p}}); }
+function foodCalc(){
+  const f = foodCfg(), lb = cfg().water.weight, age = +f.age, inches = (+f.ft || 0) * 12 + (+f.inch || 0);
+  if (!lb || !age || !inches || !f.sex) return null;
+  const kg = lb * 0.45359237, cm = inches * 2.54;
+  const bmr = 10 * kg + 6.25 * cm - 5 * age + (f.sex === "m" ? 5 : -161);
+  const tdee = bmr * +f.act;
+  const g = GOALS.find(x => x[0] === f.goal) || GOALS[2];
+  let target = tdee + g[2], floored = false;
+  const floor = f.sex === "m" ? 1500 : 1200;
+  if (g[2] < 0 && target < floor){ target = floor; floored = true; }
+  target = Math.round(target / 10) * 10;
+  const proG = Math.round(kg * f.pro), fatKcal = target * 0.30, fatG = Math.round(fatKcal / 9);
+  const carbG = Math.max(0, Math.round((target - proG * 4 - fatG * 9) / 4));
+  const pct = k => Math.round(k / target * 100);
+  return {lb, kg, age, inches, bmr: Math.round(bmr), tdee: Math.round(tdee), target, floored, floor, g, proG, fatG, carbG,
+    proPct: pct(proG * 4), fatPct: pct(fatG * 9), carbPct: pct(carbG * 4)};
+}
+function viewFood(){
+  const f = foodCfg(), r = foodCalc(), w = cfg().water.weight;
+  const field = (lbl, inner) => `<div class="row"><div class="grow t">${lbl}</div>${inner}</div>`;
+  const src = (t, u) => `<li><a class="link" style="padding:0;text-transform:none;letter-spacing:0;font:inherit;text-decoration:underline" target="_blank" rel="noopener" href="${u}">${t}</a></li>`;
+  return `<div class="kicker">Calories & macros</div><h1>Food</h1>
+  <h2>About you</h2>
+  <div class="card">
+    ${field("Sex", `<div class="seg" data-foodseg="sex">${[["m","Male"],["f","Female"]].map(([k,l]) => `<button type="button" class="${f.sex===k?"on":""}" data-food-sex="${k}">${l}</button>`).join("")}</div>`)}
+    ${field("Age", `<input class="num" id="food-age" type="number" min="18" max="100" inputmode="numeric" value="${f.age}"><span class="sub">years</span>`)}
+    ${field("Height", `<input class="num" id="food-ft" type="number" min="3" max="8" inputmode="numeric" value="${f.ft}" style="width:52px"><span class="sub">ft</span><input class="num" id="food-in" type="number" min="0" max="11" inputmode="numeric" value="${f.inch}" style="width:52px"><span class="sub">in</span>`)}
+    <div class="row tap" data-go="settings"><div class="grow"><div class="t">Weight</div><div class="m">Change it in Settings → Water</div></div><span class="sub">${w ? w + " lb" : "Not set"} ›</span></div>
+  </div>
+  <h2>Activity</h2>
+  <div class="sub" style="margin:-4px 0 10px">Most people overestimate this. If you're between two levels, pick the lower one.</div>
+  <div class="card">${ACT.map(([v, n, d]) => `<label class="row"><input type="radio" class="chk" name="food-act" data-food-act="${v}" ${f.act===v?"checked":""} style="border-radius:50%"><div class="grow"><div class="t">${n}</div><div class="m">${d}</div></div></label>`).join("")}</div>
+  <h2>Goal</h2>
+  <div class="chips">${GOALS.map(([k, l]) => `<button class="chip ${f.goal===k?"on":""}" data-food-goal="${k}">${l}</button>`).join("")}</div>
+  <h2>Protein</h2>
+  <div class="card"><div class="row"><div class="grow"><div class="t">${f.pro} g per kg of body weight</div><div class="m">0.8 is the minimum for adults. 1.4–2.0 suits people who exercise.</div></div></div>
+    <div style="padding:4px 16px 14px"><input type="range" class="tk-slider" id="food-pro" min="0.8" max="2.2" step="0.1" value="${f.pro}"></div></div>
+
+  ${r ? `<h2>Your numbers</h2>
+  <div class="bcard"><div class="lbl">Eat each day</div><div class="big" style="margin-top:6px">${r.target.toLocaleString()}<small>calories</small></div>
+    <div class="statline">${esc(r.g[1])}${r.g[2] ? ` · ${r.g[2] > 0 ? "+" : "−"}${Math.abs(r.g[2])} from maintenance` : ""}</div>
+    ${r.floored ? `<div class="statline" style="margin-top:6px"><b>Raised to ${r.floor.toLocaleString()}.</b> Weight-loss guidelines don't go below this without medical supervision, so expect slower loss.</div>` : ""}
+    <div class="macros">
+      <div><b>${r.proG} g</b><span>Protein · ${r.proPct}%</span></div>
+      <div><b>${r.carbG} g</b><span>Carbs · ${r.carbPct}%</span></div>
+      <div><b>${r.fatG} g</b><span>Fat · ${r.fatPct}%</span></div>
+    </div>
+    <div class="mbar"><i style="width:${r.proPct}%"></i><i style="width:${r.carbPct}%"></i><i style="width:${r.fatPct}%"></i></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="row"><div class="grow"><div class="t">Resting burn</div><div class="m">Calories your body uses at complete rest</div></div><b>${r.bmr.toLocaleString()}</b></div>
+    <div class="row"><div class="grow"><div class="t">Maintenance</div><div class="m">Resting burn × your activity level</div></div><b>${r.tdee.toLocaleString()}</b></div>
+  </div>` : `<div class="card" style="margin-top:22px"><div class="empty">${w ? "Fill in sex, age and height to see your numbers." : "Add your weight in Settings → Water, then fill in sex, age and height."}</div></div>`}
+
+  <h2>How this is worked out</h2>
+  <div class="card"><div class="empty" style="color:var(--ink);line-height:1.65">
+    <p style="margin-top:0"><b>Resting burn</b> uses the Mifflin-St Jeor equation: 10 × weight (kg) + 6.25 × height (cm) − 5 × age + 5 for men, or − 161 for women. A 2005 review by the American Dietetic Association compared the common equations against measured metabolism. Mifflin-St Jeor came out the most reliable, landing within 10% of the measured value for more people than any other.</p>
+    <p><b>Maintenance</b> multiplies that by a standard activity factor, from 1.2 for sedentary to 1.9 for extremely active.</p>
+    <p><b>Your goal</b> takes off 500 calories a day to lose about 1 lb a week, as the NIH suggests, or 250 for about ½ lb. Gaining adds 250. For weight loss, the 2013 AHA/ACC/TOS obesity guideline uses 1,200–1,500 calories for women and 1,500–1,800 for men, so the target never goes below the bottom of those ranges.</p>
+    <p><b>Protein</b> is set per kilogram of body weight. The adult RDA is 0.8 g/kg. The International Society of Sports Nutrition recommends 1.4–2.0 g/kg a day for people who exercise. The default of 1.6 sits in that range.</p>
+    <p><b>Fat</b> is 30% of calories and <b>carbs</b> fill the rest, using the National Academies' healthy ranges for adults: fat 20–35%, carbs 45–65%, protein 10–35%.</p>
+    <p style="margin-bottom:0">All of this is an estimate, usually within about 10%. Weigh in weekly. If your weight isn't moving the way the goal says after 2–3 weeks, adjust by 100–200 calories. These formulas aren't meant for pregnancy, under-18s or medical conditions; check with a doctor or dietitian in those cases.</p>
+  </div></div>
+  <h2>Sources</h2>
+  <div class="card"><ul class="srcs">
+    ${src("Mifflin et al. 1990, A new predictive equation for resting energy expenditure (Am J Clin Nutr)", "https://pubmed.ncbi.nlm.nih.gov/2305711/")}
+    ${src("Frankenfield et al. 2005, Comparison of predictive equations for resting metabolic rate (J Am Diet Assoc)", "https://pubmed.ncbi.nlm.nih.gov/15883556/")}
+    ${src("International Society of Sports Nutrition, Position Stand: protein and exercise (2017)", "https://pubmed.ncbi.nlm.nih.gov/28642676/")}
+    ${src("National Academies, Dietary Reference Intakes: macronutrients", "https://www.nationalacademies.org/news/2002/09/report-offers-new-eating-and-physical-activity-targets-to-reduce-chronic-disease-risk")}
+    ${src("NIH News in Health, Healthy Weight Control", "https://newsinhealth.nih.gov/2022/12/healthy-weight-control")}
+    ${src("2013 AHA/ACC/TOS Guideline for the Management of Overweight and Obesity in Adults", "https://pubmed.ncbi.nlm.nih.gov/24222017/")}
+  </ul></div>`;
 }
 
 /* ---------- Notes ---------- */
@@ -1400,6 +1498,10 @@ document.addEventListener("change", e => {
   const num = () => Number(el.value);
   if (el.id === "set-water-unit"){ const goalMl = c.water.goal * UNITS[c.water.unit].ml, nu = el.value, U = UNITS[nu]; saveCfg({water: {...rawWater(), unit: nu, step: U.step, goal: nu === "ml" ? Math.round(goalMl / 50) * 50 : nu === "oz" ? Math.max(8, Math.round(goalMl / U.ml / 8) * 8) : Math.max(1, Math.round(goalMl / U.ml))}}); return; }
   if (el.id === "set-water-step"){ if (num() > 0) saveCfg({water: {...rawWater(), step: num()}}); else render(); return; }
+  if (el.id === "food-age"){ const v = Math.round(num()); if (v >= 18 && v <= 100) saveFood({age: v}); else { toast("Age 18–100."); render(); } return; }
+  if (el.id === "food-ft"){ const v = Math.round(num()); if (v >= 3 && v <= 8) saveFood({ft: v}); else render(); return; }
+  if (el.id === "food-in"){ const v = Math.round(num()); if (v >= 0 && v <= 11) saveFood({inch: v}); else render(); return; }
+  if (el.id === "food-pro"){ saveFood({pro: Math.round(num() * 10) / 10}); return; }
   if (el.id === "set-weight"){ const w = num(); if (!(w >= 50 && w <= 700)){ toast("Enter your weight in pounds."); render(); return; }
     const first = !c.water.weight; saveCfg({water: {...rawWater(), weight: r1(w), ...(first ? {auto: true, unit: "oz", step: 8} : {})}}); if (first) toast("Water goal set to " + Math.round(w/2) + " oz a day."); return; }
   if (el.id === "set-water-goal"){ if (num() > 0) saveCfg({water: {...rawWater(), goal: num()}}); else render(); return; }
@@ -1541,7 +1643,7 @@ function render(){
   renderNav();
   const a = document.activeElement, fid = a && a.id, val = a && a.value, ss = a && a.selectionStart, se = a && a.selectionEnd;
   let html;
-  if (tab === "apps" && app){ const AV = {tasks: viewTasks, calendar: viewCalendar, goals: viewGoals, notes: viewNotes, journal: viewNotes, trends: viewTrends}[app]; html = (app === "goals" && goalOpen && items[goalOpen] ? "" : `<button class="link back" data-go="apps">‹ Apps</button>`) + AV(); }
+  if (tab === "apps" && app){ const AV = {tasks: viewTasks, calendar: viewCalendar, goals: viewGoals, food: viewFood, notes: viewNotes, journal: viewNotes, trends: viewTrends}[app]; html = (app === "goals" && goalOpen && items[goalOpen] ? "" : `<button class="link back" data-go="apps">‹ Apps</button>`) + AV(); }
   else html = ({today: viewToday, apps: viewApps, settings: viewSettings}[tab] || viewToday)();
   $("#app").innerHTML = html;
   if (fid){ const el = document.getElementById(fid); if (el){ if (val != null && fid !== "journal" && el.type !== "time") el.value = val; el.focus(); try { el.setSelectionRange(ss, se); } catch {} } }
@@ -1563,7 +1665,7 @@ function render(){
 
 /* ---------- events ---------- */
 document.addEventListener("click", e => {
-  const el = e.target.closest("[data-kit-on],[data-kit-preset],[data-kit-font],[data-kit-reset],[data-goal-open],[data-goal-close],[data-goal-quick],[data-gstep],[data-gstep-del],[data-glog-del],[data-calview],[data-weeknav],[data-tag-del],[data-theme-pick],[data-toggle],[data-meal-up],[data-meal-del],[data-hab-up],[data-hab-del],[data-waterset],[data-notesmode],[data-open-journal],[data-water],[data-meal],[data-food],[data-quality],[data-range],[data-catfilter],[data-quickcat],[data-go],[data-act],[data-toggle-task],[data-edit-task],[data-edit-event],[data-habit],[data-viewday],[data-calsel],[data-calnav],[data-taskfilter],[data-quickdue],[data-open-note],[data-open-html]");
+  const el = e.target.closest("[data-food-sex],[data-food-act],[data-food-goal],[data-kit-on],[data-kit-preset],[data-kit-font],[data-kit-reset],[data-goal-open],[data-goal-close],[data-goal-quick],[data-gstep],[data-gstep-del],[data-glog-del],[data-calview],[data-weeknav],[data-tag-del],[data-theme-pick],[data-toggle],[data-meal-up],[data-meal-del],[data-hab-up],[data-hab-del],[data-waterset],[data-notesmode],[data-open-journal],[data-water],[data-meal],[data-food],[data-quality],[data-range],[data-catfilter],[data-quickcat],[data-go],[data-act],[data-toggle-task],[data-edit-task],[data-edit-event],[data-habit],[data-viewday],[data-calsel],[data-calnav],[data-taskfilter],[data-quickdue],[data-open-note],[data-open-html]");
   if (!el) return;
   const d = el.dataset;
   if (d.go){ if (d.mode) notesMode = d.mode; go(d.go); return; }
@@ -1576,6 +1678,9 @@ document.addEventListener("click", e => {
   if (d.calview){ calView = d.calview; agendaDays = 14; render(); return; }
   if (d.weeknav){ calSel = addDays(calSel, Number(d.weeknav)); calMonth = calSel.slice(0,7); render(); return; }
   if (d.tagDel){ const ts = tags(); saveCfg({tags: ts.filter(t => t.id !== d.tagDel)}); if (catFilter === d.tagDel) catFilter = "all"; return; }
+  if (d.foodSex){ saveFood({sex: d.foodSex}); return; }
+  if (d.foodAct){ saveFood({act: d.foodAct}); return; }
+  if (d.foodGoal){ saveFood({goal: d.foodGoal}); return; }
   if (d.themePick){ applyTheme(d.themePick); applyKit(); render(); return; }
   if (d.kitOn !== undefined){ const k = {...kitState(), on: el.checked}; kitSave(k); applyKit(k); render(); return; }
   if (d.kitPreset !== undefined){ const p = KIT_PRESETS[+d.kitPreset]; const k = {...kitState(), h: p.h, s: p.s, depth: p.depth, bright: p.bright, on: true}; kitSave(k); applyKit(k); render(); return; }
