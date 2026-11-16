@@ -364,6 +364,26 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .card .ghost:disabled{opacity:.3}
 .row .num + .sub{min-width:44px}
 .hsch{flex:none;max-width:42%;text-align:right;font-size:12px;padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.petdev{margin-top:16px;padding:14px;border-radius:28px;background:var(--bezel, var(--lcd-2));display:grid;gap:12px}
+.prow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.prow:last-child{grid-template-columns:repeat(5,1fr)}.prow.two{grid-template-columns:1fr 1fr}
+.pbtn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:12px;background:var(--lcd);color:var(--ink);border:1px solid var(--line);font:500 10px/1.1 var(--pix);text-transform:uppercase;letter-spacing:calc(var(--label-track) * .3);min-width:0}
+.pbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.pbtn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pbtn.lit{background:var(--ink);color:var(--lcd)}
+.pgame{text-align:center;font:500 13px/1.3 var(--pix);text-transform:uppercase;letter-spacing:calc(var(--label-track) * .3)}.pgame span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.pbtn.bell{opacity:.45;cursor:default}.pbtn.bell.on{opacity:1;background:var(--ink);color:var(--lcd);animation:pblink 1s steps(2) infinite}
+@keyframes pblink{50%{opacity:.55}}
+.pscreen{position:relative;aspect-ratio:2/1;border-radius:14px;background:var(--lcd);border:2px solid var(--line);overflow:hidden;padding:6%}
+.petsvg{width:100%;height:100%;display:block;fill:var(--ink)}
+.pscreen:has(.petsvg.dark){background:var(--ink)}.petsvg.dark{fill:var(--lcd);opacity:.25}
+.pov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:var(--lcd);color:var(--ink);font:500 15px/1.2 var(--pix);text-transform:uppercase;letter-spacing:calc(var(--label-track) * .4);text-align:center;padding:10px;cursor:pointer}
+.pov .pl{font-size:12px;color:var(--muted)}.pov .sub2{font-size:11px;color:var(--muted)}
+.ph{font-size:26px;line-height:1;opacity:.18;margin:0 2px;font-family:system-ui,sans-serif}.ph.on{opacity:1}
+.phs .ph{font-size:13px;margin:0}
+.pbar{width:70%;height:12px;border:2px solid var(--ink);border-radius:4px}.pbar i{display:block;height:100%;background:var(--ink)}
+.petmini{width:34px;height:auto;max-height:34px;flex:none;fill:var(--ink)}
+.howto p{margin:0 0 10px;font-size:14px;line-height:1.45}
+details > summary{list-style:none}details > summary::-webkit-details-marker{display:none}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
 
@@ -665,7 +685,7 @@ async function init(){
 let prompted = false;
 function maybePromptBackup(){ if (prompted || !backupDue()) return; prompted = true; setTimeout(backupPrompt, 600); }
 
-const ICON = {"today": "<path d=\"M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/>", "apps": "<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/>", "settings": "<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "tasks": "<path d=\"M9 6h11M9 12h11M9 18h11\"/><path d=\"M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2\"/>", "calendar": "<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"15\" rx=\"2.5\"/><path d=\"M3.5 10h17M8 3v4M16 3v4\"/>", "notes": "<path d=\"M6 3.5h9l3.5 3.5v13.5H6z\"/><path d=\"M9 11h6M9 15h6\"/>", "journal": "<path d=\"M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z\"/><path d=\"M5 17a3 3 0 0 1 3-3h11M9 8h6\"/>", "trends": "<path d=\"M4 20V10M10 20V4M16 20v-8M21 20H3\"/>", "vault": "<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"16\" rx=\"2.5\"/><path d=\"M9 10l-2.5 2.5L9 15M15 10l2.5 2.5L15 15\"/>"};
+const ICON = {"today": "<path d=\"M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/>", "apps": "<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/>", "settings": "<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "tasks": "<path d=\"M9 6h11M9 12h11M9 18h11\"/><path d=\"M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2\"/>", "calendar": "<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"15\" rx=\"2.5\"/><path d=\"M3.5 10h17M8 3v4M16 3v4\"/>", "notes": "<path d=\"M6 3.5h9l3.5 3.5v13.5H6z\"/><path d=\"M9 11h6M9 15h6\"/>", "journal": "<path d=\"M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z\"/><path d=\"M5 17a3 3 0 0 1 3-3h11M9 8h6\"/>", "trends": "<path d=\"M4 20V10M10 20V4M16 20v-8M21 20H3\"/>", "pet": "<path d=\"M12 3c-4.4 0-7 3.6-7 8.2C5 16 8 21 12 21s7-5 7-9.8C19 6.6 16.4 3 12 3z\"/><path d=\"M9.5 10.5v1.5M14.5 10.5v1.5M10 15.5h4\"/>", "vault": "<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"16\" rx=\"2.5\"/><path d=\"M9 10l-2.5 2.5L9 15M15 10l2.5 2.5L15 15\"/>"};
 Object.assign(ICON, {
   reel:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9h17M7 5l2 4M12 5l2 4M17 5l2 4"/>',
   circulate:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>',
@@ -682,6 +702,7 @@ const APPS = [
   {k:"notes", n:"Notes", stat: () => { const n = all("note").length; return `${n} note${n===1?"":"s"}`; }},
   {k:"journal", n:"Journal", stat: () => { const n = all("journal").filter(j => (j.body||"").trim()).length; return `${n} entr${n===1?"y":"ies"}`; }},
   {k:"trends", n:"Trends", stat: () => "Graphs of your dailies"},
+  {k:"pet", n:"Pet", stat: () => { const P = pet(); if (!P) return "Get an egg"; if (P.dead) return "Start a new egg"; const c = P.call && (P.call.type !== "lights" || P.lights); return c ? "Needs you" : P.paused ? "Paused" : P.asleep ? "Asleep" : (P.name || PET_FORMS[P.form]); }},
   {k:"reel", n:"Reel", ext: true, stat: () => { const r = reelStats(); return r.filled ? `${r.filled} of 108 beats` : "Storyboard"; }},
   {k:"circulate", n:"Circulate", ext: true, stat: () => items["app-circulate"] ? "Beat saved" : "Beat maker"},
 ];
@@ -1032,6 +1053,7 @@ function viewToday(){
   <div class="dayline" title="Today's dailies"><div class="ln"><i style="width:${pc}%"></i></div><span>${pc}%</span></div>
   ${c.goals.on && activeGoals().length ? `<div class="gtiles">${activeGoals().map(g => { const p = Math.round(goalProg(g) * 100); return `<button class="gtile" data-goal-open="${g.id}" style="--cc:${catColor(g)}" aria-label="${esc(g.title)}, ${p}%"><span class="gw">${esc(shortName(g))}</span><span class="gbar"><i style="width:${p}%"></i></span><span class="gp">${p}%</span></button>`; }).join("")}</div>` : ""}
 
+  ${viewDay === t ? petTodayRow() : ""}
   <h2>Daily checklist <span class="sp"></span><span class="sub" style="font-family:var(--sans)">${viewDay===t?"":esc(relDay(viewDay))+" · "}${n} of ${sc.total}</span></h2>
   <div class="week">${week.map(d => { const f = dayFrac(d); return d > t ? `<span class="wd future"><span>${DOW[parse(d).getDay()].slice(0,1)}</span><span class="dot"></span></span>` : `<button class="wd ${d===viewDay?"sel":""}" data-viewday="${d}"><span>${DOW[parse(d).getDay()].slice(0,1)}</span><span class="dot"><i style="height:${Math.round(f*100)}%"></i></span></button>`; }).join("")}</div>
   <div class="card" style="margin-top:10px">
@@ -1972,6 +1994,7 @@ function viewSettings(){
     ${sw("goals", c.goals.on, "Goals")}
     ${sw("meals", c.meals.on, "Planned food checklist")}
     ${sw("journal", c.journal.on, "Journal")}
+    ${sw("pet", petCfg().on, "Pet")}
     ${sw("agenda", c.agenda.on, "Schedule and tasks due")}
   </div>
 
@@ -2150,13 +2173,439 @@ function sheet(title, inner, onSave, onDelete, saveLabel = "Save"){
 }
 function confirmSheet(title, msg, yes){ sheet(title, `<div class="sub">${esc(msg)}</div>`, () => { yes(); }, null, "Delete"); }
 
+/* ---------- Pet (a virtual pet that lives in real time) ---------- */
+const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR;
+const PET_STAGES = {
+  egg:   {n: "Egg",   len: 5 * MIN},
+  baby:  {n: "Baby",  len: 60 * MIN, hunger: 8,  happy: 6,  poop: 25,  minW: 5,  sleeps: false},
+  child: {n: "Child", until: 1 * DAY, hunger: 65, happy: 55, poop: 180, minW: 10, sleeps: true},
+  teen:  {n: "Teen",  until: 3 * DAY, hunger: 75, happy: 65, poop: 180, minW: 20, sleeps: true},
+  adult: {n: "Adult", hunger: 90, happy: 80, poop: 210, minW: 30, sleeps: true},
+};
+const PET_FORMS = {
+  egg: "Egg", pip: "Pip", tuft: "Tuft", sprout: "Sprout", lump: "Lump",
+  bloom: "Bloom", fern: "Fern", pebble: "Pebble", mossy: "Mossy", grub: "Grub",
+};
+const PET_LIFE = {bloom: 14, fern: 12, pebble: 10, mossy: 7, grub: 5};
+const PET_RULES = {callGrace: 15, poopSick: 120, zeroSick: 360, zeroDie: 720, sickDie: 720, overW: 15};
+const SPR = {
+  egg: `......####......
+....##....##....
+...#........#...
+..#..##......#..
+..#.####.....#..
+.#...##.......#.
+.#.........#..#.
+.#........###.#.
+.#.........#..#.
+..#..........#..
+...##......##...
+.....######.....`,
+  pip: `.....######.....
+....#......#....
+...#..e..e..#...
+...#........#...
+...#...##...#...
+....#......#....
+.....######.....`,
+  tuft: `.......##.......
+......#..#......
+.......##.......
+....########....
+...#........#...
+..#..e....e..#..
+..#..e....e..#..
+..#....##....#..
+...#........#...
+....########....
+....##....##....`,
+  sprout: `.....##..##.....
+....#..##..#....
+.....##..##.....
+.......##.......
+....########....
+...#........#...
+..#..e....e..#..
+..#..e....e..#..
+..#..........#..
+..#...####...#..
+...#........#...
+....########....
+....#.#..#.#....`,
+  lump: `..############..
+.#............#.
+#..ee......ee..#
+#..............#
+#.....####.....#
+#....#....#....#
+.#............#.
+..############..
+..##........##..`,
+  bloom: `..#.#..##..#.#..
+...###.##.###...
+....########....
+...#........#...
+..#..........#..
+.#..ee....ee..#.
+.#..ee....ee..#.
+.#............#.
+.#...#....#...#.
+.#....####....#.
+..#..........#..
+...#........#...
+....########....
+....#.#..#.#....`,
+  fern: `.#............#.
+.##..........##.
+.#.#........#.#.
+.#..########..#.
+..#..........#..
+..#..e....e..#..
+..#..e....e..#..
+..#..........#..
+..#....##....#..
+...#........#...
+....########....
+....##....##....`,
+  pebble: `...##......##...
+..#..######..#..
+..#..........#..
+.#............#.
+.#...e....e...#.
+.#...e....e...#.
+.#............#.
+.#.....##.....#.
+..#..........#..
+...##########...
+...##......##...`,
+  mossy: `.#.#.#..#.#.#...
+..#.#.##.#.#.#..
+..############..
+.#............#.
+.#..ee....e...#.
+.#..ee....e...#.
+.#............#.
+.#....####....#.
+.#...#....#...#.
+..#..........#..
+...##########...
+..#..#....#..#..`,
+  grub: `....########....
+..##........##..
+.#....e..e....#.
+#.....e..e.....#
+#..............#
+#....######....#
+#.....#..#.....#
+.#............#.
+..############..`,
+  grave: `......####......
+.....#....#.....
+....#..##..#....
+....#.####.#....
+....#..##..#....
+....#..##..#....
+....#......#....
+....#......#....
+..############..`,
+  poop: `...#....
+..#.#...
+..####..
+.#....#.
+.######.
+#......#
+########`,
+  meal: `..####..
+.#....#.
+#......#
+#.####.#
+########
+.######.`,
+  snack: `..#..#..
+...##...
+..####..
+.######.
+.######.
+..####..
+...##...`,
+  skull: `.#####.
+#######
+#..#..#
+#######
+.#.#.#.`,
+  z: `###
+..#
+.#.
+###`,
+  heart: `.##.##.
+#######
+#######
+.#####.
+..###..
+...#...`,
+};
+const sprGrid = k => SPR[k].split("\n").map(r => r.padEnd(16, "."));
+function sprRects(k, ox, oy, {flip = false, sleep = false} = {}){
+  const g = sprGrid(k), out = [], width = SPR[k].split("\n")[0].length;
+  g.forEach((row, y) => { for (let x = 0; x < width; x++){ let c = row[x];
+    if (c === "e" && sleep){ const below = (g[y + 1] || "")[x]; c = below === "e" ? "." : "#"; }
+    if (c === "#" || c === "e") out.push(`<rect x="${ox + (flip ? width - 1 - x : x)}" y="${oy + y}" width="1" height="1"/>`); } });
+  return out.join("");
+}
+const sprH = k => SPR[k].split("\n").length, sprW = k => SPR[k].split("\n")[0].length;
+
+/* state */
+function petRng(P, n, salt){ let t = (P.seed + n * 2654435761 + salt * 40503) >>> 0;
+  t += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+const petCfg = () => { const s = (items.settings || {}).pet || {}; return {on: s.on !== false, bed: s.bed || "22:00", wake: s.wake || "08:00"}; };
+function newPet(name){
+  const now = Date.now();
+  return {kind: "pet", name: name || "", seed: (Math.random() * 2 ** 31) >>> 0, born: now, stage: "egg", form: "egg", stageAt: now, last: Math.floor(now / MIN) * MIN,
+    hunger: 0, happy: 0, disc: 0, weight: 5, poops: 0, sick: false, doses: 0, asleep: false, lights: true,
+    hT: 0, pT: 0, poopMin: 0, zeroMin: 0, sickMin: 0, call: null, care: 0, discM: 0, sCare: 0, sDisc: 0, nextFalse: null, lifeEnd: null, paused: false, dead: null, hatched: null};
+}
+function petAsleepAt(t){
+  const c = petCfg(), d = new Date(t), m = d.getHours() * 60 + d.getMinutes();
+  const [bh, bm] = c.bed.split(":").map(Number), [wh, wm] = c.wake.split(":").map(Number), b = bh * 60 + bm, w = wh * 60 + wm;
+  return b > w ? (m >= b || m < w) : (m >= b && m < w);
+}
+function petDie(P, t, why){ P.dead = {at: t, why}; P.call = null; P.asleep = false; }
+function petEvolve(P, t){
+  const age = t - (P.hatched || P.born);
+  if (P.stage === "baby" && t - P.stageAt >= PET_STAGES.baby.len){ P.stage = "child"; P.form = "tuft"; P.stageAt = t; P.sCare = 0; P.sDisc = 0; P.weight = Math.max(P.weight, 10); P.nextFalse = t + (3 + petRng(P, t / MIN, 7) * 5) * HOUR; return true; }
+  if (P.stage === "child" && age >= PET_STAGES.child.until){ P.stage = "teen"; P.form = P.sCare <= 3 ? "sprout" : "lump"; P.stageAt = t; P.sCare = 0; P.sDisc = 0; P.weight = Math.max(P.weight, 20); return true; }
+  if (P.stage === "teen" && age >= PET_STAGES.teen.until){
+    const c = P.sCare, d = P.sDisc;
+    P.form = P.form === "sprout" ? (c <= 2 && d <= 1 ? "bloom" : c <= 2 ? "fern" : c <= 5 ? "pebble" : "mossy") : (c <= 3 && d <= 2 ? "pebble" : c <= 6 ? "mossy" : "grub");
+    P.stage = "adult"; P.stageAt = t; P.sCare = 0; P.sDisc = 0; P.weight = Math.max(P.weight, 30);
+    P.lifeEnd = t + (PET_LIFE[P.form] + Math.floor(petRng(P, t / MIN, 9) * 3)) * DAY; return true;
+  }
+  return false;
+}
+function petStep(P, t){
+  if (P.dead) return;
+  const n = t / MIN;
+  if (P.stage === "egg"){ if (t - P.stageAt >= PET_STAGES.egg.len){ P.stage = "baby"; P.form = "pip"; P.stageAt = t; P.hatched = t; P.hunger = 0; P.happy = 0; P.weight = 5; } return; }
+  petEvolve(P, t);
+  if (P.stage === "adult" && P.lifeEnd && t >= P.lifeEnd){ petDie(P, t, "age"); return; }
+  const S = PET_STAGES[P.stage];
+  const sleep = S.sleeps && petAsleepAt(t);
+  if (sleep && !P.asleep){ P.asleep = true; if (P.call && P.call.type === "false") P.call = null; if (P.lights) P.call = {type: "lights", at: t, counted: false}; }
+  if (!sleep && P.asleep){ P.asleep = false; P.lights = true; if (P.call && P.call.type === "lights") P.call = null; }
+  // sickness and neglect clocks run day and night
+  if (P.sick){ P.sickMin++; if (P.sickMin >= PET_RULES.sickDie){ petDie(P, t, "sick"); return; } }
+  if ((P.hunger === 0 || P.happy === 0) && !P.asleep){ P.zeroMin++; if (P.zeroMin >= PET_RULES.zeroDie){ petDie(P, t, "neglect"); return; } if (P.zeroMin >= PET_RULES.zeroSick && !P.sick) petSicken(P, n); } else if (P.hunger > 0 && P.happy > 0) P.zeroMin = 0;
+  if (P.poops > 0){ P.poopMin++; if (P.poopMin >= PET_RULES.poopSick && !P.sick) petSicken(P, n); } else P.poopMin = 0;
+  if (!P.asleep){
+    P.hT++; if (P.hT >= S.hunger){ P.hT = 0; P.hunger = Math.max(0, P.hunger - 1); }
+    P.happyT = (P.happyT || 0) + 1; if (P.happyT >= S.happy){ P.happyT = 0; P.happy = Math.max(0, P.happy - 1); }
+    P.pT++; if (P.pT >= S.poop){ P.pT = 0; if (P.poops < 4) P.poops++; }
+    if ((P.stage === "child" || P.stage === "teen") && P.disc < 100 && P.nextFalse && t >= P.nextFalse && !P.call){
+      P.call = {type: "false", at: t, counted: false}; P.nextFalse = t + (3 + petRng(P, n, 3) * 5) * HOUR; }
+  }
+  // calls
+  const need = P.hunger === 0 || P.happy === 0 || P.sick;
+  if (need && (!P.call || P.call.type === "false") && !P.asleep) P.call = {type: "need", at: t, counted: false};
+  if (P.call){
+    const age = (t - P.call.at) / MIN;
+    if (P.call.type === "need" && !need) P.call = null;
+    else if (P.call.type === "lights" && (!P.lights || !P.asleep)) P.call = null;
+    else if (age >= PET_RULES.callGrace && !P.call.counted){
+      if (P.call.type === "false"){ P.discM++; P.sDisc++; P.call = null; }
+      else { P.care++; P.sCare++; P.call.counted = true; }
+    }
+  }
+}
+function petSicken(P, n){ P.sick = true; P.sickMin = 0; P.doses = 1 + (petRng(P, n, 5) < 0.5 ? 1 : 0); }
+function petSim(P, until = Date.now()){
+  if (!P || P.dead || P.paused) { if (P && P.paused) P.last = Math.floor(until / MIN) * MIN; return P; }
+  let steps = 0;
+  while (P.last + MIN <= until && steps < 60 * 24 * 40){ P.last += MIN; petStep(P, P.last); steps++; if (P.dead) break; }
+  return P;
+}
+let petAnim = null, petGame = null, petStat = 0, petFrame = 0, petX = 8, petDir = 1;
+function pet(){ return items.pet && items.pet.kind === "pet" ? items.pet : null; }
+function petSave(P, silent = true){ put("pet", {...P}, {silent}); }
+function petNow(){ const P = pet(); if (!P) return null; const before = JSON.stringify(P); const Q = petSim(JSON.parse(before)); if (JSON.stringify(Q) !== before) items.pet = Q, petSave(Q); return items.pet; }
+function petShow(kind, ms = 1600){ petAnim = {kind, until: Date.now() + ms}; petPaint(); }
+function petAct(a){
+  let P = petNow(); if (!P) return;
+  P = JSON.parse(JSON.stringify(P));
+  const S = PET_STAGES[P.stage] || {}, minW = S.minW || 5, t = Date.now();
+  if (a === "lights"){ P.lights = !P.lights; if (!P.lights && P.call && P.call.type === "lights") P.call = null; petSave(P, false); return; }
+  if (P.dead || P.stage === "egg"){ toast(P.dead ? "Start a new egg below." : "It hasn't hatched yet."); return; }
+  if (P.asleep && !["status", "clean", "med"].includes(a)){ toast("Shh, it's asleep."); return; }
+  if (!P.lights && !P.asleep && a !== "status"){ toast("Turn the light on first."); return; }
+  if (a === "meal"){ if (P.hunger >= 4){ petShow("no"); return; } P.hunger++; P.weight++; petShow("meal"); }
+  else if (a === "snack"){ P.happy = Math.min(4, P.happy + 1); P.weight += 2; if (P.weight > minW + PET_RULES.overW && !P.sick && Math.random() < 0.5){ P.sick = true; P.sickMin = 0; P.doses = 1 + (Math.random() < 0.5 ? 1 : 0); } petShow("snack"); }
+  else if (a === "clean"){ if (!P.poops){ petShow("no"); return; } P.poops = 0; P.poopMin = 0; petShow("clean"); }
+  else if (a === "med"){ if (!P.sick){ petShow("no"); return; } P.doses--; if (P.doses <= 0){ P.sick = false; P.sickMin = 0; toast("All better."); } else toast("One more dose needed."); petShow("med"); }
+  else if (a === "scold"){ if (!P.call || P.call.type !== "false"){ petShow("no"); toast("It wasn't misbehaving."); return; } P.disc = Math.min(100, P.disc + 25); P.call = null; petShow("scold"); }
+  else if (a === "play"){ petGame = {round: 0, wins: 0, look: null, res: null}; petPaint(); petRender(); return; }
+  if (P.call && P.call.type === "need" && P.hunger > 0 && P.happy > 0 && !P.sick) P.call = null;
+  P.weight = Math.max(minW, P.weight);
+  petSave(P, false);
+}
+function petGuess(dir){
+  const g = petGame; if (!g || g.res) return;
+  g.look = Math.random() < 0.5 ? "l" : "r"; const win = g.look === dir; g.round++; if (win) g.wins++;
+  g.res = win ? "hit" : "miss"; petPaint(); petRender();
+  setTimeout(() => {
+    if (!petGame) return;
+    if (g.round >= 5){
+      let P = JSON.parse(JSON.stringify(petNow())); const minW = (PET_STAGES[P.stage] || {}).minW || 5;
+      P.weight = Math.max(minW, P.weight - 1); if (g.wins >= 3) P.happy = Math.min(4, P.happy + 1);
+      if (P.call && P.call.type === "need" && P.hunger > 0 && P.happy > 0 && !P.sick) P.call = null;
+      toast(g.wins >= 3 ? `Won ${g.wins} of 5. It's happier.` : `Won ${g.wins} of 5. Need 3 to cheer it up.`);
+      petGame = null; petSave(P, false); return;
+    }
+    g.res = null; g.look = null; petPaint(); petRender();
+  }, 900);
+}
+function petScreen(P, frame){
+  const r = [];
+  const dark = !P.lights;
+  if (P.dead){ r.push(sprRects("grave", 8, 7)); }
+  else if (petGame){
+    const k = P.form, lk = petGame.look, h = sprH(k);
+    r.push(sprRects(k, 8, 16 - h, {flip: lk === "l"}));
+    if (petGame.res === "hit") r.push(sprRects("heart", 25, 1));
+  } else if (P.stage === "egg"){
+    r.push(sprRects("egg", 8 + (frame % 2), 16 - sprH("egg")));
+  } else {
+    const k = P.form, h = sprH(k), w = sprW(k);
+    const A = petAnim && petAnim.until > Date.now() ? petAnim.kind : null;
+    let x = P.asleep ? 8 : A ? 12 : petX, y = 16 - h - (!P.asleep && frame % 2 && !A ? 1 : 0);
+    if (A === "meal" || A === "snack"){ const f = Math.floor((petAnim.until - Date.now()) / 400); r.push(sprRects(A, 2, 16 - sprH(A) - 1)); if (f % 2) y -= 1; }
+    if (A === "no"){ x = 8 + (frame % 2 ? 1 : -1); }
+    r.push(sprRects(k, Math.max(0, Math.min(32 - w, x)), y, {flip: !P.asleep && !A && petDir < 0, sleep: P.asleep}));
+    if (P.asleep) r.push(sprRects("z", 1, 1 + (frame % 2)));
+    if (P.sick) r.push(sprRects("skull", 0, 0));
+    if (A === "scold") r.push(`<rect x="3" y="1" width="1" height="5"/><rect x="3" y="7" width="1" height="1"/>`);
+    if (A !== "clean"){ const PP = [[24, 9], [24, 1], [16, 9], [16, 1]]; for (let i = 0; i < P.poops; i++) r.push(sprRects("poop", PP[i][0], PP[i][1])); }
+    if (A === "clean"){ const f = 1 - (petAnim.until - Date.now()) / 1600; r.push(`<rect x="${Math.round(32 - f * 32)}" y="0" width="1" height="16"/>`); }
+  }
+  return `<svg viewBox="0 0 32 16" shape-rendering="crispEdges" class="petsvg ${dark ? "dark" : ""}" aria-hidden="true"><g>${r.join("")}</g></svg>`;
+}
+function petPaint(){
+  const el = document.getElementById("pet-screen"); if (!el) return;
+  const P = pet(); if (!P) return;
+  el.innerHTML = petScreen(P, petFrame) + petOverlay(P);
+}
+function hearts(n){ return Array.from({length: 4}, (_, i) => `<span class="ph ${i < n ? "on" : ""}">♥</span>`).join(""); }
+function petOverlay(P){
+  if (petGame) return "";
+  if (!petStat) return "";
+  const ageD = P.hatched ? Math.floor((P.last - P.hatched) / DAY) : 0;
+  const pages = [
+    `<div class="pl">Hungry</div><div>${hearts(P.hunger)}</div>`,
+    `<div class="pl">Happy</div><div>${hearts(P.happy)}</div>`,
+    `<div class="pl">Discipline</div><div class="pbar"><i style="width:${P.disc}%"></i></div>`,
+    `<div class="pl">${esc(PET_FORMS[P.form])} · ${PET_STAGES[P.stage].n}</div><div>Age ${ageD} day${ageD === 1 ? "" : "s"} · ${P.weight} g</div>`,
+  ];
+  return `<div class="pov" data-pet="status">${pages[(petStat - 1) % 4]}</div>`;
+}
+function petTick(){
+  petFrame++;
+  const P = pet(); if (!P) return;
+  if (!P.asleep && !petGame && !(petAnim && petAnim.until > Date.now())){
+    const w = sprW(P.form || "pip"); if (petRng(P, petFrame, 11) < 0.25) petDir = -petDir;
+    petX += petDir; if (petX < 0){ petX = 0; petDir = 1; } if (petX > 32 - w - 8){ petX = 32 - w - 8; petDir = -1; }
+  }
+  if (petAnim && petAnim.until <= Date.now()) petAnim = null;
+  petPaint();
+  if (petFrame % 20 === 0){ const before = petVis(items.pet); petNow(); if (petVis(items.pet) !== before && ((tab === "apps" && app === "pet") || tab === "today")) render(); }
+}
+setInterval(() => { if (document.getElementById("pet-screen") || (petFrame % 20 === 19)) petTick(); else petFrame++; }, 500);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && pet()){ petNow(); render(); } });
+const PI = {
+  meal: `<path d="M7 3v8M5 3v4a2 2 0 0 0 4 0V3M7 11v10M16 3c-2 1-3 3-3 6s1 4 3 4v8"/>`,
+  lights: `<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>`,
+  snack: `<path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M8 12l-4-3v6zM16 12l4-3v6z"/>`,
+  play: `<circle cx="12" cy="12" r="8"/><path d="M4.5 9.5c3 1.5 12 1.5 15 0M4.5 14.5c3-1.5 12-1.5 15 0"/>`,
+  med: `<rect x="4" y="9" width="16" height="6" rx="3"/><path d="M12 9v6"/>`,
+  clean: `<path d="M4 20h16M6 20l2-9h8l2 9M10 11V4h4v7"/>`,
+  status: `<path d="M5 20V10M10 20V4M15 20v-7M20 20V8"/>`,
+  scold: `<path d="M12 4v10M12 18v2"/>`,
+  call: `<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 20a2 2 0 0 0 4 0"/>`,
+};
+function petBtn(k, label, extra = ""){ return `<button class="pbtn ${extra}" data-pet="${k}" ${k === "lights" ? `aria-pressed="${extra ? "false" : "true"}"` : ""}><svg viewBox="0 0 24 24">${PI[k]}</svg><span>${label}</span></button>`; }
+function viewPet(){
+  const P = petNow(), c = petCfg();
+  const how = `<details class="card" style="margin-top:22px;padding:4px 16px 14px"><summary class="row" style="padding:12px 0;border:0;cursor:pointer"><div class="grow t">How it works</div><span class="sub">›</span></summary>
+    <div class="howto">
+    <p>It lives in real time, even when Base is closed. When you come back, everything that happened while you were away is played out.</p>
+    <p><b>Hungry and Happy</b> each have 4 hearts that drain while it's awake. Meals fill Hungry. Snacks and winning the game fill Happy. Check them with Status.</p>
+    <p><b>Calls.</b> The bell lights up when a heart hits zero, when it's sick, or when it falls asleep with the light on. Answer within 15 minutes or it counts as a care mistake.</p>
+    <p><b>Fake calls.</b> Children and teens sometimes call when nothing is wrong. If Status shows full hearts, tap Scold. Ignoring a fake call is a discipline mistake. Scold at the wrong time and nothing happens.</p>
+    <p><b>Poop</b> comes every few hours. Left for 2 hours, it makes it sick. Medicine takes 1 or 2 doses.</p>
+    <p><b>Weight</b> goes up with food (meal +1 g, snack +2 g) and down with each game. Snacks while it's overweight can make it sick.</p>
+    <p><b>Sleep.</b> From bedtime to wake-up it sleeps and its hearts stop draining. Turn the light off when it falls asleep.</p>
+    <p><b>Growing up.</b> Egg hatches in 5 minutes. Baby for 1 hour, child until day 1, teen until day 3, then adult. Care and discipline mistakes during each stage decide what it grows into: Sprout or Lump as a teen, then Bloom, Fern, Pebble, Mossy or Grub. Better care means a longer life, about 5 to 16 days as an adult.</p>
+    <p><b>It can die</b> if it's sick for 12 hours, or if a heart stays at zero for 12 hours. Six hours at zero makes it sick first.</p>
+    <p><b>Pause</b> freezes time completely, for days when you can't look after it.</p></div></details>`;
+  const settings = `<h2>Settings</h2><div class="card">
+    <div class="row"><div class="grow t">Bedtime</div><input type="time" class="num" id="pet-bed" value="${c.bed}" style="width:auto"></div>
+    <div class="row"><div class="grow t">Wakes up</div><input type="time" class="num" id="pet-wake" value="${c.wake}" style="width:auto"></div>
+    ${P && !P.dead ? `<label class="row"><div class="grow"><div class="t">Pause</div><div class="m">Time stops until you turn this off</div></div><input type="checkbox" class="switch" data-pet="pause" ${P.paused ? "checked" : ""}></label>` : ""}
+  </div>`;
+  const past = ((items.settings || {}).petPast || []).slice().reverse();
+  const pastHtml = past.length ? `<h2>Past pets</h2><div class="card">${past.map(x => `<div class="row"><div class="grow"><div class="t">${esc(x.name || PET_FORMS[x.form])}</div><div class="m">${esc(PET_FORMS[x.form])} · ${x.days} day${x.days === 1 ? "" : "s"} · ${esc(x.why)}</div></div></div>`).join("")}</div>` : "";
+  if (!P) return `<div class="kicker">Virtual pet</div><h1>Pet</h1>
+    <div class="card" style="margin-top:16px"><div class="empty">No pet yet. It starts as an egg and hatches in 5 minutes.</div></div>
+    <form class="quick" data-form="pet-new" style="margin-top:12px"><input id="pet-name" placeholder="Name (optional)" autocomplete="off" maxlength="16"><button class="btn pri">Get an egg</button></form>${how}${settings}${pastHtml}`;
+  const call = P.call && (P.call.type !== "lights" || P.lights) && !P.dead;
+  const title = P.name || PET_FORMS[P.form];
+  const why = {age: "Lived a full life", sick: "Got sick and wasn't treated", neglect: "Went too long without care"};
+  return `<div class="kicker">Virtual pet</div><h1>${esc(title)}</h1>
+  <div class="sub">${P.dead ? esc(why[P.dead.why] || "") : P.paused ? "Paused" : P.stage === "egg" ? "Hatching soon" : `${esc(PET_FORMS[P.form])} · ${PET_STAGES[P.stage].n}${P.asleep ? " · asleep" : ""}`}</div>
+  <div class="petdev">
+    <div class="prow">${petBtn("meal", "Meal")}${petBtn("snack", "Snack")}${petBtn("play", "Play")}${petBtn("med", "Medicine")}</div>
+    <div class="pscreen" id="pet-screen">${petScreen(P, petFrame)}${petOverlay(P)}</div>
+    ${petGame ? `<div class="pgame">${petGame.res ? (petGame.res === "hit" ? "Got it!" : "Missed") : "Which way will it look?"} <span>Round ${Math.min(5, petGame.round + (petGame.res ? 0 : 1))} of 5 · ${petGame.wins} won</span></div><div class="prow two"><button class="btn" data-pet="left">◀ Left</button><button class="btn" data-pet="right">Right ▶</button></div>` : ""}
+    <div class="prow">${petBtn("clean", "Clean")}${petBtn("lights", "Light", P.lights ? "" : "lit")}${petBtn("status", "Status")}${petBtn("scold", "Scold")}<span class="pbtn bell ${call ? "on" : ""}" aria-label="${call ? "Calling" : "Quiet"}"><svg viewBox="0 0 24 24">${PI.call}</svg><span>${call ? "Calling" : "Quiet"}</span></span></div>
+  </div>
+  ${P.dead ? `<form class="quick" data-form="pet-new" style="margin-top:16px"><input id="pet-name" placeholder="Name (optional)" autocomplete="off" maxlength="16"><button class="btn pri">New egg</button></form>` : ""}
+  ${how}${settings}${pastHtml}`;
+}
+const petVis = P => P ? JSON.stringify([P.hunger, P.happy, !!P.call, P.asleep, !!P.dead, P.stage, P.form, P.poops, P.sick, P.lights, P.paused]) : "";
+function petRender(){ if (app === "pet") render(); }
+function petTodayRow(){
+  const P = petNow(); if (!P || !petCfg().on) return "";
+  const call = P.call && (P.call.type !== "lights" || P.lights) && !P.dead;
+  const k = P.dead ? "grave" : P.form, h = sprH(k), w = sprW(k);
+  const st = P.dead ? "Passed away" : P.paused ? "Paused" : P.stage === "egg" ? "Hatching" : P.asleep ? "Asleep" : `<span class="phs">${hearts(P.hunger)}</span> <span class="phs">${hearts(P.happy)}</span>`;
+  return `<div class="card" style="margin-top:14px"><div class="row tap" data-go="pet">
+    <svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" class="petmini" aria-hidden="true">${sprRects(k, 0, 0, {sleep: P.asleep})}</svg>
+    <div class="grow"><div class="t">${esc(P.name || PET_FORMS[P.form])}${call ? ` <span class="tag warn">Needs you</span>` : ""}</div><div class="m">${st}</div></div><span class="sub">›</span></div></div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-pet]"); if (!b || b.tagName === "INPUT") return;
+  const a = b.dataset.pet;
+  if (a === "status"){ petStat = petStat >= 4 ? 0 : petStat + 1; petPaint(); return; }
+  if (a === "left" || a === "right"){ petGuess(a[0]); return; }
+  petStat = 0; petAct(a);
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.matches && t.matches("[data-pet=pause]")){ let P = JSON.parse(JSON.stringify(petNow())); P.paused = t.checked; P.last = Math.floor(Date.now() / MIN) * MIN; petSave(P, false); toast(t.checked ? "Paused. Time is frozen." : "Running again."); }
+  if (t.id === "pet-bed" || t.id === "pet-wake"){ if (!t.value) return; petNow(); const s = items.settings || {}; saveCfg({pet: {...(s.pet || {}), [t.id === "pet-bed" ? "bed" : "wake"]: t.value}}); }
+});
+document.addEventListener("submit", e => {
+  const f = e.target; if (!f.dataset || f.dataset.form !== "pet-new") return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const old = pet(), name = (f.querySelector("#pet-name") || {}).value || "";
+  if (old && old.dead){ const s = items.settings || {}; saveCfg({petPast: [...(s.petPast || []), {name: old.name, form: old.form, days: old.hatched ? Math.floor((old.dead.at - old.hatched) / DAY) : 0, why: ({age: "Old age", sick: "Sickness", neglect: "Neglect"})[old.dead.why] || ""}].slice(-20)}); }
+  petGame = null; petStat = 0; put("pet", newPet(name.trim()));
+}, true);
+
 /* ---------- render ---------- */
 function render(){
   if (mode === "loading") return;
   renderNav();
   const a = document.activeElement, fid = a && a.id, val = a && a.value, ss = a && a.selectionStart, se = a && a.selectionEnd;
   let html;
-  if (tab === "apps" && app){ const AV = {tasks: viewTasks, calendar: viewCalendar, goals: viewGoals, food: viewFoodApp, notes: viewNotes, journal: viewNotes, trends: viewTrends}[app]; html = (app === "goals" && goalOpen && items[goalOpen] ? "" : `<button class="link back" data-go="apps">‹ Apps</button>`) + AV(); }
+  if (tab === "apps" && app){ const AV = {tasks: viewTasks, calendar: viewCalendar, goals: viewGoals, food: viewFoodApp, notes: viewNotes, journal: viewNotes, trends: viewTrends, pet: viewPet}[app]; html = (app === "goals" && goalOpen && items[goalOpen] ? "" : `<button class="link back" data-go="apps">‹ Apps</button>`) + AV(); }
   else html = ({today: viewToday, apps: viewApps, settings: viewSettings}[tab] || viewToday)();
   $("#app").innerHTML = html;
   if (fid){ const el = document.getElementById(fid); if (el){ if (val != null && fid !== "journal" && el.type !== "time") el.value = val; el.focus(); try { el.setSelectionRange(ss, se); } catch {} } }
@@ -2209,7 +2658,7 @@ document.addEventListener("click", e => {
   if (d.kitReset !== undefined){ kitSave({...KIT_DEF}); applyKit(); render(); return; }
   if (d.toggle){ const c = cfg(), on = el.checked, k = d.toggle;
     if (k === "water") saveCfg({water: {...rawWater(), on}}); else if (k === "wauto") saveCfg({water: {...rawWater(), auto: on, ...(on ? {unit: "oz", step: rawWater().step && rawWater().unit === "oz" ? rawWater().step : 8} : {goal: cfg().water.goal})}}); else if (k === "meals") saveCfg({mealsCfg: {...c.meals, on}}); else if (k === "sleep") saveCfg({sleepCfg: {...c.sleep, on}});
-    else if (k === "journal") saveCfg({journalOn: on}); else if (k === "goals") saveCfg({goalsOn: on}); else if (k === "agenda") saveCfg({agendaOn: on}); return; }
+    else if (k === "journal") saveCfg({journalOn: on}); else if (k === "goals") saveCfg({goalsOn: on}); else if (k === "pet") saveCfg({pet: {...((items.settings || {}).pet || {}), on}}); else if (k === "agenda") saveCfg({agendaOn: on}); return; }
   if (d.mealUp){ const c = cfg(); moveUp([...c.meals.list], d.mealUp, l => saveCfg({mealsCfg: {...c.meals, list: l}})); return; }
   if (d.mealDel){ const c = cfg(); saveCfg({mealsCfg: {...c.meals, list: c.meals.list.filter(m => m.id !== d.mealDel)}}); return; }
   if (d.habUp){ const l = habitsList(); const i = l.findIndex(h => h.id === d.habUp); if (i < 1) return; l.splice(i-1, 0, l.splice(i,1)[0]); l.forEach((h, j) => { if (h.order !== j) put(h.id, {...items[h.id], order:j}, {silent:true}); }); render(); return; }
