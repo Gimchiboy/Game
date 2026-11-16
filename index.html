@@ -393,6 +393,7 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .swatch{width:26px;height:26px;border-radius:50%;background:var(--sw);border:1px solid var(--line)}
 .howto p{margin:0 0 10px;font-size:14px;line-height:1.45}
 details > summary{list-style:none}details > summary::-webkit-details-marker{display:none}
+.rp-seg{display:flex}.rp-seg button{flex:1}
 .rpo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0;text-transform:none;letter-spacing:0;font:inherit}.rpo input[type=radio]{width:18px;height:18px;margin:0;flex:none}.rpo .num{width:70px;flex:none}.rpo .sel{flex:1 1 34%;min-width:110px;max-width:none;width:auto}.rpo > span{white-space:nowrap}.rp-y{display:flex;align-items:center;gap:8px;flex:1 1 40%}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
@@ -842,9 +843,15 @@ function recurFields(r, anchor, {none = true} = {}){
   r = r || {}; const freq = r.freq || (none ? "none" : "daily"), ends = r.until ? "on" : r.count ? "after" : "never";
   const days = r.days && r.days.length ? r.days : [parse(anchor || today()).getDay()];
   return `<div class="rp">
-    <div class="two"><label class="fld"><span>Repeat</span><select name="freq">${Object.entries(FREQ).filter(([k]) => none || k !== "none").map(([k,l]) => `<option value="${k}" ${k===freq?"selected":""}>${l}</option>`).join("")}</select></label>
-      <label class="fld rp-iv"><span>Every</span><div class="ivrow"><input inputmode="numeric" autocomplete="off" type="text" name="interval" min="1" max="99" value="${r.interval||1}"><span class="sub rp-unit"></span></div></label></div>
-    <div class="fld rp-days"><span>On</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${days.includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${days.join(",")}"></div>
+    ${none ? `<label class="fld" style="display:flex;align-items:center;gap:12px"><span style="margin:0;flex:1">Repeat</span><input type="checkbox" class="switch" name="rpon" ${freq !== "none" ? "checked" : ""}></label>` : ""}
+    <div class="rp-body"><input type="hidden" name="freq" value="${freq}">
+    <div class="fld"><span>${none ? "How often" : "Repeat"}</span><div class="seg rp-seg" data-seg="freqbase">${[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["yearly","Yearly"]].map(([k,l]) => `<button type="button" data-val="${k}" class="${k === (freq === "none" ? "weekly" : freq === "weekdays" ? "daily" : freq) ? "on" : ""}">${l}</button>`).join("")}</div><input type="hidden" name="freqbase" value="${freq === "none" ? "weekly" : freq === "weekdays" ? "daily" : freq}"></div>
+    <div class="fld rp-daily"><span>Which days</span>
+      <label class="rpo"><input type="radio" name="dmode" value="every" ${freq !== "weekdays" ? "checked" : ""}><span>Every day, or every few days</span></label>
+      <label class="rpo"><input type="radio" name="dmode" value="weekday" ${freq === "weekdays" ? "checked" : ""}><span>Every weekday (Mon–Fri)</span></label></div>
+    <label class="fld rp-iv"><span>Every</span><div class="ivrow"><input inputmode="numeric" autocomplete="off" type="text" name="interval" value="${r.interval||1}" style="max-width:90px"><span class="sub rp-unit"></span></div></label>
+    <div class="fld rp-days"><span>On</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${days.includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${days.join(",")}">
+      <div class="chips" style="margin-top:6px"><button type="button" class="link" data-rdays="1,2,3,4,5" style="padding:2px 0">Weekdays</button><button type="button" class="link" data-rdays="0,6" style="padding:2px 0">Weekends</button><button type="button" class="link" data-rdays="0,1,2,3,4,5,6" style="padding:2px 0">Every day</button></div></div>
     ${(() => { const a = parse(anchor || today()), nthD = Math.ceil(a.getDate() / 7), last = a.getDate() + 7 > dim(a);
       const mode = r.mode === "nth" ? "nth" : "day", dom = r.dom || a.getDate(), nth = r.nth ?? (last && nthD > 4 ? -1 : Math.min(4, nthD)), wd = r.wd ?? a.getDay(), mo = r.month ?? a.getMonth();
       const moSel = `<select class="sel rp-mo" name="rmonth" aria-label="Month">${MON.map((m, i) => `<option value="${i}" ${i === mo ? "selected" : ""}>${m}</option>`).join("")}</select>`;
@@ -856,11 +863,15 @@ function recurFields(r, anchor, {none = true} = {}){
     <div class="two rp-end"><label class="fld"><span>Ends</span><select name="ends"><option value="never" ${ends==="never"?"selected":""}>Never</option><option value="on" ${ends==="on"?"selected":""}>On a date</option><option value="after" ${ends==="after"?"selected":""}>After a number of times</option></select></label>
       <label class="fld rp-until"><span>End date</span><input type="date" name="until" value="${esc(r.until||"")}"></label>
       <label class="fld rp-count"><span>Times</span><input inputmode="numeric" autocomplete="off" type="text" name="count" min="1" max="999" value="${r.count||10}"></label></div>
-    <div class="sub rp-sum" style="margin:-4px 0 12px"></div></div>`;
+    <div class="sub rp-sum" style="margin:-4px 0 12px"></div></div></div>`;
 }
 function wireRecur(S, anchorName){
   const q = n => S.querySelector(`[name=${n}]`), A = () => (q(anchorName) && q(anchorName).value) || today();
   const sync = () => {
+    const on = !q("rpon") || q("rpon").checked, base = q("freqbase").value, dmode = (S.querySelector("[name=dmode]:checked") || {}).value;
+    q("freq").value = !on ? "none" : base === "daily" && dmode === "weekday" ? "weekdays" : base;
+    S.querySelector(".rp-body").style.display = on ? "" : "none";
+    S.querySelector(".rp-daily").style.display = base === "daily" ? "" : "none";
     const fq = q("freq").value, en = q("ends").value, a = parse(A()), dm = dim(a), nth = Math.ceil(a.getDate() / 7), isLast = a.getDate() + 7 > dm;
     S.querySelector(".rp-iv").style.display = fq === "none" || fq === "weekdays" ? "none" : "";
     S.querySelector(".rp-unit").textContent = ({daily:"days", weekly:"weeks", monthly:"months", yearly:"years"})[fq] || "";
@@ -876,13 +887,16 @@ function wireRecur(S, anchorName){
   };
   S.querySelectorAll("[name=rmonth1],[name=rmonth2]").forEach(x => x.addEventListener("change", () => S.querySelectorAll("[name=rmonth1],[name=rmonth2]").forEach(y => y.value = x.value)));
   S.querySelectorAll("[name=dom],[name=rnth],[name=rwd],[name=rmonth1],[name=rmonth2]").forEach(x => x.addEventListener(x.tagName === "SELECT" ? "change" : "input", () => { const rr = x.closest(".rpo").querySelector("[name=rmode]"); rr.checked = true; }));
-  S.querySelectorAll("[name=freq],[name=ends],[name=rmode],[name=interval],[name=count],[name=until],[name=dom],[name=rnth],[name=rwd],[name=rmonth1],[name=rmonth2]").forEach(x => { x.addEventListener("change", sync); x.addEventListener("input", sync); });
+  S.querySelector(".rp-seg").addEventListener("click", () => setTimeout(sync, 0));
+  S.querySelectorAll("[data-rdays]").forEach(b => b.onclick = () => { const ds = b.dataset.rdays.split(","), dp = S.querySelector(".rp-days [data-daypick]"); dp.querySelectorAll("button").forEach(x => x.classList.toggle("on", ds.includes(x.dataset.val))); dp.nextElementSibling.value = ds.join(","); sync(); });
+  S.querySelectorAll("[name=rpon],[name=dmode],[name=freq],[name=ends],[name=rmode],[name=interval],[name=count],[name=until],[name=dom],[name=rnth],[name=rwd],[name=rmonth1],[name=rmonth2]").forEach(x => { x.addEventListener("change", sync); x.addEventListener("input", sync); });
   if (q(anchorName)) q(anchorName).addEventListener("change", sync);
   S.querySelector(".rp-days [data-daypick]").addEventListener("click", () => setTimeout(sync, 0));
   sync(); return sync;
 }
 function readRecur(f, anchor){
-  const q = n => f.querySelector(`[name=${n}]`), fq = q("freq").value; if (fq === "none") return null;
+  const q = n => f.querySelector(`[name=${n}]`), on = !q("rpon") || q("rpon").checked, base = q("freqbase") ? q("freqbase").value : q("freq").value, dm = (f.querySelector("[name=dmode]:checked") || {}).value;
+  const fq = !on ? "none" : base === "daily" && dm === "weekday" ? "weekdays" : base; if (fq === "none") return null;
   const a = parse(anchor), rep = {freq: fq, interval: fq === "weekdays" ? 1 : Math.max(1, Math.min(99, parseInt(q("interval").value) || 1))};
   if (fq === "weekly"){ rep.days = q("days").value.split(",").filter(x => x !== "").map(Number); if (!rep.days.length) rep.days = [a.getDay()]; }
   if (fq === "monthly" || fq === "yearly"){
@@ -2084,7 +2098,7 @@ function taskSheet(id, preset = {}){
     id ? () => { del(id); } : null);
   const S = $(".sheet"); wireRecur(S, "due");
   const rg = () => { const fq = S.querySelector("[name=freq]").value; S.querySelector(".rp-regen").style.display = fq === "none" || fq === "weekdays" ? "none" : ""; };
-  S.querySelector("[name=freq]").addEventListener("change", rg); rg();
+  S.addEventListener("click", () => setTimeout(rg, 10)); S.addEventListener("change", () => setTimeout(rg, 10)); rg();
 }
 function addUnits(d, freq, n){ const a = parse(d);
   if (freq === "daily") return addDays(d, n); if (freq === "weekly") return addDays(d, 7 * n);
