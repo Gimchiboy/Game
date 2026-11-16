@@ -1280,10 +1280,14 @@ async function searchOFF(q){
   const base = "https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&json=1&page_size=15&fields=code,product_name,brands,serving_size,serving_quantity,nutriments&search_terms=" + encodeURIComponent(q);
   const us = await searchOFFUrl(base + "&tagtype_0=countries&tag_contains_0=contains&tag_0=united-states").catch(() => []);
   if (us.length >= 3) return us;
-  return us.concat((await searchOFFUrl(base)).filter(x => !us.some(y => y.name === x.name))).slice(0, 15);
+  const world = await searchOFFUrl(base).catch(() => []);
+  if (!us.length && !world.length) throw new Error("off unreachable");
+  return us.concat(world.filter(x => !us.some(y => y.name === x.name))).slice(0, 15);
 }
 async function searchOFFUrl(u){
-  let r; try { r = await fetch(u); } catch { await new Promise(z => setTimeout(z, 600)); r = await fetch(u); }
+  let r, last;
+  for (let i = 0; i < 3 && !r; i++){ try { r = await fetch(u); } catch (e) { last = e; await new Promise(z => setTimeout(z, 800 * (i + 1))); } }
+  if (!r) throw last || new Error("off unreachable");
   if (!r.ok) throw new Error("off " + r.status);
   const j = await r.json();
   return (j.products || []).map(offToFood).filter(Boolean);
