@@ -371,6 +371,10 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .mbar i:nth-child(3){opacity:.28}
 .srcs{margin:0;padding:12px 16px 12px 32px;display:grid;gap:8px;font-size:13px;color:var(--ink)}
 .srcs a{color:var(--ink)!important}
+
+.mrow .mhead{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted)}
+.mrow .mhead b{color:var(--ink);font-weight:600}
+.mrow .gbar{margin-top:5px}
 </style>
 </head>
 <body>
@@ -596,7 +600,7 @@ const APPS = [
   {k:"tasks", n:"Tasks", stat: () => { const n = all("task").filter(t => !t.done).length; return n ? `${n} open` : "All clear"; }},
   {k:"calendar", n:"Calendar", stat: () => { const t = today(); for (let i = 0; i < 30; i++){ const d = addDays(t, i), ev = eventsFor(d).filter(e => e.dayN === 0); if (ev.length) return `Next: ${ev[0].title}`; } return "Nothing ahead"; }},
   {k:"goals", n:"Goals", stat: () => { const n = all("goal").filter(g => !g.archived).length; return n ? `${n} in progress` : "Set one"; }},
-  {k:"food", n:"Food", stat: () => { const r = foodCalc(); return r ? `${r.target.toLocaleString()} cal a day` : "Calories & macros"; }},
+  {k:"food", n:"Food", stat: () => { const r = foodCalc(), k = Math.round(sumEats(eatsOf(today())).kcal); return r ? `${k.toLocaleString()} of ${r.target.toLocaleString()} cal` : k ? `${k.toLocaleString()} cal today` : "Food tracker"; }},
   {k:"notes", n:"Notes", stat: () => { const n = all("note").length; return `${n} note${n===1?"":"s"}`; }},
   {k:"journal", n:"Journal", stat: () => { const n = all("journal").filter(j => (j.body||"").trim()).length; return `${n} entr${n===1?"y":"ies"}`; }},
   {k:"trends", n:"Trends", stat: () => "Graphs of your dailies"},
@@ -939,7 +943,7 @@ function viewCalendar(){
 }
 
 /* ---------- Body: eat, drink, sleep ---------- */
-function barChart(key, days, vals, goal, max, unit){
+function barChart(key, days, vals, goal, max, unit, under){
   const W = 340, H = 150, L = 26, R = 6, T = 10, B = 22, ph = H - T - B, pw = W - L - R;
   const n = days.length, slot = pw / n, bw = Math.max(3, Math.min(16, slot * 0.62));
   const y = v => T + ph - (Math.min(v, max) / max) * ph;
@@ -953,22 +957,22 @@ function barChart(key, days, vals, goal, max, unit){
     g += `<rect class="hit" x="${cx - slot/2}" y="${T}" width="${slot}" height="${ph}" data-tip="${esc(tip)}" data-x="${cx}" data-y="${v==null?y(0):y(v)}"/>`;
     if (v != null && v > 0){
       const top = y(v), x0 = cx - bw/2, r = Math.min(4, bw/2, (y(0)-top));
-      g += `<path class="bar ${v >= goal ? "" : "miss"}" d="M${x0},${y(0)} V${top+r} Q${x0},${top} ${x0+r},${top} H${x0+bw-r} Q${x0+bw},${top} ${x0+bw},${top+r} V${y(0)} Z"/>`;
+      g += `<path class="bar ${(under ? v <= goal : v >= goal) ? "" : "miss"}" d="M${x0},${y(0)} V${top+r} Q${x0},${top} ${x0+r},${top} H${x0+bw-r} Q${x0+bw},${top} ${x0+bw},${top+r} V${y(0)} Z"/>`;
     }
   });
   g += `<line class="goal" x1="${L}" x2="${W-R}" y1="${y(goal)}" y2="${y(goal)}"/>`;
   const rows = days.map((d, i) => `<tr><td>${esc(fmtDay(d))}</td><td>${vals[i] == null ? "—" : vals[i] + " " + unit}</td></tr>`).reverse().join("");
   return `<div class="chart" data-chart="${key}"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(unit)} per day, goal ${goal}">${g}</svg></div>
-    <div class="legendrow"><span><i></i>Met goal</span><span><i class="faint"></i>Below goal</span><span><i class="dash"></i>Goal (${goal})</span></div>
+    <div class="legendrow"><span><i></i>${under ? "Within target" : "Met goal"}</span><span><i class="faint"></i>${under ? "Over target" : "Below goal"}</span><span><i class="dash"></i>${under ? "Target" : "Goal"} (${goal.toLocaleString()})</span></div>
     <details class="tv"><summary>Show as table</summary><table class="tbl"><tr><th>Day</th><th>Value</th></tr>${rows}</table></details>`;
 }
-function statLine(vals, goal, unit, days){
+function statLine(vals, goal, unit, days, under){
   const got = vals.filter(v => v != null);
   if (!got.length) return `<div class="statline">Nothing logged in this range yet.</div>`;
   const avg = Math.round(got.reduce((a,b) => a+b, 0) / got.length * 10) / 10;
-  const met = got.filter(v => v >= goal).length;
+  const met = got.filter(v => under ? v <= goal : v >= goal).length;
   const t = today(), denom = days ? days.filter(d => d <= t).length : vals.length;
-  return `<div class="statline">Average <b>${avg} ${unit}</b> · goal met <b>${met} of ${denom}</b> days</div>`;
+  return `<div class="statline">Average <b>${avg.toLocaleString()} ${unit}</b> · ${under ? "within target" : "goal met"} <b>${met} of ${denom}</b> days</div>`;
 }
 function viewTrends(){
   const t = today(), c = cfg(), u = UNITS[c.water.unit].n;
@@ -987,6 +991,9 @@ function viewTrends(){
   <div class="bcard"><div class="lbl">Daily checklist · %</div>${statLine(cv, 100, "%", days)}${barChart("check", days, cv, 100, 100, "%")}</div>
   ${c.water.on ? `<div class="bcard"><div class="lbl">Water · ${u}</div>${statLine(wv, c.water.goal, u, days)}${barChart("water", days, wv, c.water.goal, maxOf(wv, Math.ceil(c.water.goal * 1.25)), u)}</div>` : ""}
   ${c.sleep.on ? `<div class="bcard"><div class="lbl">Sleep · hours</div>${statLine(sv, c.sleep.goal, "h", days)}${barChart("sleep", days, sv, c.sleep.goal, maxOf(sv, 10), "h")}</div>` : ""}
+  ${(() => { const fr = foodCalc(); const kv = days.map(d => { const x = dayOf(d); return x && x.eats && x.eats.length ? Math.round(sumEats(x.eats).kcal) : null; }); if (!kv.some(v => v != null)) return "";
+    const tgt = fr ? fr.target : Math.max(...kv.filter(v => v != null));
+    return `<div class="bcard"><div class="lbl">Calories eaten</div>${fr ? statLine(kv, tgt, "cal", days, true) : ""}${barChart("kcal", days, kv, tgt, Math.max(Math.ceil(tgt * 1.3 / 100) * 100, ...kv.filter(v => v != null)), "cal", true)}</div>`; })()}
   ${c.meals.on ? `<div class="bcard"><div class="lbl">Meals · of ${nm}</div>${statLine(mv, nm, "meals", days)}${barChart("meals", days, mv, nm, nm, "meals")}</div>` : ""}`;
 }
 function wireCharts(){
@@ -1253,6 +1260,89 @@ function viewFood(){
     ${src("NIH News in Health, Healthy Weight Control", "https://newsinhealth.nih.gov/2022/12/healthy-weight-control")}
     ${src("2013 AHA/ACC/TOS Guideline for the Management of Overweight and Obesity in Adults", "https://pubmed.ncbi.nlm.nih.gov/24222017/")}
   </ul></div>`;
+}
+
+/* ---------- Food tracker ---------- */
+let foodTab = "log", foodDay = null;
+const eatsOf = d => ((items["day-" + d] || {}).eats || []);
+const sumEats = es => es.reduce((a, e) => { const q = +e.qty || 1; a.kcal += (+e.kcal || 0) * q; a.p += (+e.p || 0) * q; a.c += (+e.c || 0) * q; a.f += (+e.f || 0) * q; return a; }, {kcal: 0, p: 0, c: 0, f: 0});
+const myFoods = () => all("foodItem").sort((a, b) => (b.last || 0) - (a.last || 0));
+const r0 = v => Math.round(v);
+function foodMeals(){ return [...cfg().meals.list, {id: "other", name: "Other"}]; }
+function macroBar(lbl, got, target, unit){
+  const pct = target ? Math.min(100, Math.round(got / target * 100)) : 0, over = target && got > target;
+  return `<div class="mrow"><div class="mhead"><span>${lbl}</span><span><b>${r0(got)}</b>${target ? ` / ${r0(target)}` : ""} ${unit}${over ? " · over" : ""}</span></div><div class="gbar" style="--cc:var(--ink)"><i style="width:${pct}%"></i></div></div>`;
+}
+function viewFoodApp(){
+  const menu = `<div class="kicker">Food tracker</div><h1>Food</h1>
+    <div class="chips" style="margin-top:10px">${[["log","Log"],["foods","My foods"],["targets","Targets"]].map(([k, l]) => `<button class="chip ${foodTab===k?"on":""}" data-foodtab="${k}">${l}</button>`).join("")}</div>`;
+  if (foodTab === "targets") return menu + viewFood().replace(/^<div class="kicker">[^<]*<\/div><h1>Food<\/h1>/, "");
+  if (foodTab === "foods"){
+    const fs = myFoods();
+    return menu + `<div style="margin-top:14px"><button class="btn pri" data-act="food-new-item">New food</button></div>
+    <div class="card" style="margin-top:14px">${fs.length ? fs.map(x => `<div class="row tap" data-food-item="${x.id}"><div class="grow"><div class="t">${esc(x.name)}</div><div class="m">${r0(x.kcal)} cal · P ${r0(x.p)} · C ${r0(x.c)} · F ${r0(x.f)}${x.serving ? " · " + esc(x.serving) : ""}</div></div><span class="sub">›</span></div>`).join("") : `<div class="empty">No saved foods yet. Foods you log are saved here for next time.</div>`}</div>`;
+  }
+  const d = foodDay || today(), es = eatsOf(d), tot = sumEats(es), r = foodCalc();
+  const left = r ? r.target - tot.kcal : null;
+  return menu + `
+  <div class="calhead" style="margin-top:14px"><div class="ttl">${esc(relDay(d))}${d === today() ? "" : " · " + esc(fmtDay(d))}</div>
+    <button class="btn sm" data-foodday="-1" aria-label="Previous day">‹</button>${d !== today() ? `<button class="btn sm" data-foodday="0">Today</button>` : ""}<button class="btn sm" data-foodday="1" aria-label="Next day" ${d >= today() ? "disabled" : ""}>›</button></div>
+  <div class="bcard"><div class="lbl">Calories<span class="sp"></span>${r ? (left >= 0 ? `${r0(left).toLocaleString()} left` : `${r0(-left).toLocaleString()} over`) : ""}</div>
+    <div class="big" style="margin-top:6px">${r0(tot.kcal).toLocaleString()}<small>${r ? `of ${r.target.toLocaleString()}` : "eaten"}</small></div>
+    ${r ? `<div class="gbar big-bar" style="--cc:var(--ink)"><i style="width:${Math.min(100, Math.round(tot.kcal / r.target * 100))}%"></i></div>` : `<div class="statline">Set your targets in the Targets menu to see what's left.</div>`}
+    <div style="margin-top:12px;display:grid;gap:10px">${macroBar("Protein", tot.p, r && r.proG, "g")}${macroBar("Carbs", tot.c, r && r.carbG, "g")}${macroBar("Fat", tot.f, r && r.fatG, "g")}</div>
+  </div>
+  ${foodMeals().map(m => { const list = es.filter(e => (e.meal || "other") === m.id); const st = sumEats(list);
+    return `<h2>${esc(m.name)}<span class="sp"></span>${list.length ? `<span class="sub" style="font-family:var(--sans);text-transform:none;letter-spacing:0">${r0(st.kcal)} cal</span>` : ""}<button class="link" data-food-add="${esc(m.id)}">+ Add</button></h2>
+    ${list.length ? `<div class="card">${list.map(e => `<div class="row"><div class="grow tap" data-food-edit="${esc(e.id)}"><div class="t">${esc(e.name)}${(+e.qty || 1) !== 1 ? ` <span class="sub">× ${e.qty}</span>` : ""}</div><div class="m">${r0(e.kcal * (e.qty || 1))} cal · P ${r0(e.p * (e.qty || 1))} · C ${r0(e.c * (e.qty || 1))} · F ${r0(e.f * (e.qty || 1))}</div></div><button class="ghost" data-food-del="${esc(e.id)}" aria-label="Remove">✕</button></div>`).join("")}</div>` : ""}`; }).join("")}`;
+}
+function foodEntrySheet(meal, editId){
+  const d = foodDay || today(), es = eatsOf(d), cur = editId ? es.find(e => e.id === editId) : null;
+  const e = cur || {name: "", qty: 1, kcal: "", p: "", c: "", f: "", meal};
+  const recent = myFoods().slice(0, 12);
+  sheet(cur ? "Edit food" : "Add food", `
+    ${!cur && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(x => `<button type="button" class="chip" data-pick="${x.id}">${esc(x.name)}</button>`).join("")}</div></div>` : ""}
+    <label class="fld"><span>Food</span><input name="name" value="${esc(e.name)}" required></label>
+    <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.1" step="any" inputmode="decimal" value="${e.qty || 1}"></label>
+      <label class="fld"><span>Meal</span><select name="meal">${foodMeals().map(m => `<option value="${esc(m.id)}" ${(e.meal||"other")===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></label></div>
+    <div class="sub" style="margin:-2px 0 8px">Per serving</div>
+    <div class="two"><label class="fld"><span>Calories</span><input name="kcal" type="number" min="0" step="any" inputmode="decimal" value="${e.kcal}" required></label>
+      <label class="fld"><span>Protein (g)</span><input name="p" type="number" min="0" step="any" inputmode="decimal" value="${e.p}"></label></div>
+    <div class="two"><label class="fld"><span>Carbs (g)</span><input name="c" type="number" min="0" step="any" inputmode="decimal" value="${e.c}"></label>
+      <label class="fld"><span>Fat (g)</span><input name="f" type="number" min="0" step="any" inputmode="decimal" value="${e.f}"></label></div>
+    ${cur ? "" : `<label class="fld" style="display:flex;align-items:center;gap:12px"><span style="margin:0;flex:1">Save to My foods</span><input type="checkbox" class="switch" name="keep" checked></label>`}`,
+    f => {
+      const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories per serving.";
+      const n = x => Math.max(0, Number(x) || 0);
+      const entry = {id: cur ? cur.id : uid(), name, qty: Math.max(0.1, Number(f.qty.value) || 1), meal: f.meal.value, kcal: n(f.kcal.value), p: n(f.p.value), c: n(f.c.value), f: n(f.f.value), at: cur ? cur.at : Date.now()};
+      const dd = dayDoc(d), list = (dd.eats || []).filter(x => x.id !== entry.id).concat([entry]);
+      const meals = {...(dd.meals || {})}; if (cfg().meals.list.some(m => m.id === entry.meal)) meals[entry.meal] = true;
+      setDay(d, {eats: list, meals});
+      if (!cur && f.keep.checked){
+        const ex = myFoods().find(x => x.name.toLowerCase() === name.toLowerCase());
+        const body = {kind: "foodItem", name, kcal: entry.kcal, p: entry.p, c: entry.c, f: entry.f, last: Date.now()};
+        put(ex ? ex.id : uid(), {...(ex ? items[ex.id] : {}), ...body}, {silent: true});
+      }
+    },
+    cur ? () => { const dd = dayDoc(d); setDay(d, {eats: (dd.eats || []).filter(x => x.id !== editId)}); } : null);
+  const S = $(".sheet");
+  S.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const x = items[b.dataset.pick]; if (!x) return;
+    S.querySelector("[name=name]").value = x.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = x[k] ?? "");
+    S.querySelectorAll("[data-pick]").forEach(y => y.classList.toggle("on", y === b)); });
+}
+function foodItemSheet(id){
+  const x = id ? items[id] : {name: "", serving: "", kcal: "", p: "", c: "", f: ""};
+  sheet(id ? "Edit food" : "New food", `
+    <label class="fld"><span>Food</span><input name="name" value="${esc(x.name)}" required></label>
+    <label class="fld"><span>Serving size (optional)</span><input name="serving" value="${esc(x.serving || "")}"></label>
+    <div class="two"><label class="fld"><span>Calories</span><input name="kcal" type="number" min="0" step="any" inputmode="decimal" value="${x.kcal}" required></label>
+      <label class="fld"><span>Protein (g)</span><input name="p" type="number" min="0" step="any" inputmode="decimal" value="${x.p}"></label></div>
+    <div class="two"><label class="fld"><span>Carbs (g)</span><input name="c" type="number" min="0" step="any" inputmode="decimal" value="${x.c}"></label>
+      <label class="fld"><span>Fat (g)</span><input name="f" type="number" min="0" step="any" inputmode="decimal" value="${x.f}"></label></div>`,
+    f => { const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories.";
+      const n = v => Math.max(0, Number(v) || 0);
+      put(id || uid(), {...(id ? items[id] : {kind: "foodItem", last: Date.now()}), name, serving: f.serving.value.trim(), kcal: n(f.kcal.value), p: n(f.p.value), c: n(f.c.value), f: n(f.f.value)}); },
+    id ? () => confirmSheet("Delete this food?", "It's removed from My foods. Past logs keep their numbers.", () => del(id)) : null);
 }
 
 /* ---------- Notes ---------- */
@@ -1648,7 +1738,7 @@ function render(){
   renderNav();
   const a = document.activeElement, fid = a && a.id, val = a && a.value, ss = a && a.selectionStart, se = a && a.selectionEnd;
   let html;
-  if (tab === "apps" && app){ const AV = {tasks: viewTasks, calendar: viewCalendar, goals: viewGoals, food: viewFood, notes: viewNotes, journal: viewNotes, trends: viewTrends}[app]; html = (app === "goals" && goalOpen && items[goalOpen] ? "" : `<button class="link back" data-go="apps">‹ Apps</button>`) + AV(); }
+  if (tab === "apps" && app){ const AV = {tasks: viewTasks, calendar: viewCalendar, goals: viewGoals, food: viewFoodApp, notes: viewNotes, journal: viewNotes, trends: viewTrends}[app]; html = (app === "goals" && goalOpen && items[goalOpen] ? "" : `<button class="link back" data-go="apps">‹ Apps</button>`) + AV(); }
   else html = ({today: viewToday, apps: viewApps, settings: viewSettings}[tab] || viewToday)();
   $("#app").innerHTML = html;
   if (fid){ const el = document.getElementById(fid); if (el){ if (val != null && fid !== "journal" && el.type !== "time") el.value = val; el.focus(); try { el.setSelectionRange(ss, se); } catch {} } }
@@ -1670,7 +1760,7 @@ function render(){
 
 /* ---------- events ---------- */
 document.addEventListener("click", e => {
-  const el = e.target.closest("[data-food-sex],[data-food-act],[data-food-goal],[data-kit-on],[data-kit-preset],[data-kit-font],[data-kit-reset],[data-goal-open],[data-goal-close],[data-goal-quick],[data-gstep],[data-gstep-del],[data-glog-del],[data-calview],[data-weeknav],[data-tag-del],[data-theme-pick],[data-toggle],[data-meal-up],[data-meal-del],[data-hab-up],[data-hab-del],[data-waterset],[data-notesmode],[data-open-journal],[data-water],[data-meal],[data-food],[data-quality],[data-range],[data-catfilter],[data-quickcat],[data-go],[data-act],[data-toggle-task],[data-edit-task],[data-edit-event],[data-habit],[data-viewday],[data-calsel],[data-calnav],[data-taskfilter],[data-quickdue],[data-open-note],[data-open-html]");
+  const el = e.target.closest("[data-foodtab],[data-foodday],[data-food-add],[data-food-edit],[data-food-del],[data-food-item],[data-food-sex],[data-food-act],[data-food-goal],[data-kit-on],[data-kit-preset],[data-kit-font],[data-kit-reset],[data-goal-open],[data-goal-close],[data-goal-quick],[data-gstep],[data-gstep-del],[data-glog-del],[data-calview],[data-weeknav],[data-tag-del],[data-theme-pick],[data-toggle],[data-meal-up],[data-meal-del],[data-hab-up],[data-hab-del],[data-waterset],[data-notesmode],[data-open-journal],[data-water],[data-meal],[data-food],[data-quality],[data-range],[data-catfilter],[data-quickcat],[data-go],[data-act],[data-toggle-task],[data-edit-task],[data-edit-event],[data-habit],[data-viewday],[data-calsel],[data-calnav],[data-taskfilter],[data-quickdue],[data-open-note],[data-open-html]");
   if (!el) return;
   const d = el.dataset;
   if (d.go){ if (d.mode) notesMode = d.mode; go(d.go); return; }
@@ -1683,6 +1773,12 @@ document.addEventListener("click", e => {
   if (d.calview){ calView = d.calview; agendaDays = 14; render(); return; }
   if (d.weeknav){ calSel = addDays(calSel, Number(d.weeknav)); calMonth = calSel.slice(0,7); render(); return; }
   if (d.tagDel){ const ts = tags(); saveCfg({tags: ts.filter(t => t.id !== d.tagDel)}); if (catFilter === d.tagDel) catFilter = "all"; return; }
+  if (d.foodtab){ foodTab = d.foodtab; window.scrollTo(0,0); render(); return; }
+  if (d.foodday !== undefined){ const n = +d.foodday; foodDay = n === 0 ? null : addDays(foodDay || today(), n); if (foodDay && foodDay >= today()) foodDay = null; render(); return; }
+  if (d.foodAdd){ foodEntrySheet(d.foodAdd); return; }
+  if (d.foodEdit){ foodEntrySheet(null, d.foodEdit); return; }
+  if (d.foodDel){ const dd = dayDoc(foodDay || today()); setDay(foodDay || today(), {eats: (dd.eats || []).filter(x => x.id !== d.foodDel)}); return; }
+  if (d.foodItem){ foodItemSheet(d.foodItem); return; }
   if (d.foodSex){ saveFood({sex: d.foodSex}); return; }
   if (d.foodAct){ saveFood({act: d.foodAct}); return; }
   if (d.foodGoal){ saveFood({goal: d.foodGoal}); return; }
@@ -1728,6 +1824,7 @@ document.addEventListener("click", e => {
     case "new-task": taskSheet(null, {date: d.date || (quickDue==="today"?today():quickDue==="tomorrow"?addDays(today(),1):"")}); break;
     case "new-note": openNote(uid()); break;
     case "paste-html": htmlSheet(null); break;
+    case "food-new-item": foodItemSheet(null); break;
     case "new-goal": goalSheet(null); break;
     case "goal-edit": goalSheet(goalOpen); break;
     case "goal-archive": { const g = items[goalOpen]; if (g){ put(goalOpen, {...g, archived: !g.archived}); toast(g.archived ? "Back in progress." : "Archived."); } break; }
