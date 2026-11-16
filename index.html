@@ -2761,11 +2761,12 @@ const GENES = {
   gbody: ["cut", "pebble", "crystal"], gvar: ["spikes", "ore", "geode", "moss"],
   ci: [0, 1, 2],
 };
-const KIND_N = {critter: "Critter", animal: "Animal", plant: "Plant", gem: "Gem"};
+const KIND_N = {critter: "Critter", animal: "Animal", plant: "Plant", gem: "Gem", rare: "Super rare"};
 const KIND_C = {
   animal: [["Cocoa", "#d9b08a", "#8a5638"], ["Cream", "#f7edd9", "#c98a52"], ["Lilac", "#dccaff", "#8350c4"]],
   critter: [["Peach", "#ffcdb5", "#d9603f"], ["Sky", "#bfe0ff", "#3f74c9"], ["Lilac", "#dccaff", "#8350c4"]],
   plant: [["Leaf", "#a8dc8c", "#d9824a"], ["Teal", "#9fe0cf", "#e5658a"], ["Olive", "#c9d98a", "#9a5ad0"]],
+  rare: [["Starry", "#8a92e6", "#ffd45e"], ["Ember", "#ff9e7a", "#fff0a0"], ["Frost", "#8fdcf2", "#ffffff"]],
   gem: [["Ruby", "#f4919f", "#b8304a"], ["Gold", "#f6d872", "#c08a1e"], ["Slate", "#a9aab8", "#56586a"]],
 };
 const colorsOf = g => { if (g.ci == null && g.c) return {c: g.c, pc: g.pc, n: ""}; const k = KIND_C[g.kind || "critter"][g.ci || 0]; return {c: k[1], pc: k[2], n: k[0]}; };
@@ -2783,13 +2784,14 @@ function randGenes(r = Math.random){
   const w = (opts, weights) => { let x = r() * weights.reduce((a, b) => a + b, 0); for (let i = 0; i < opts.length; i++){ x -= weights[i]; if (x < 0) return opts[i]; } return opts[0]; };
   return {shape: pick(GENES.shape, r), top: pick(GENES.top, r), feet: w(GENES.feet, [5, 2, 2, 1]), arms: w(GENES.arms, [3, 1]),
     eyes: w(GENES.eyes, [4, 3, 2, 2, 1]), mouth: w(GENES.mouth, [4, 3, 2, 2, 1]), cheek: w(GENES.cheek, [4, 2, 2, 1]), pattern: w(GENES.pattern, [3, 2, 2, 1, 1, 1, 1]),
-    kind: pick(GENES.kind, r), abody: pick(GENES.abody, r), avar: pick(GENES.avar, r), pbody: pick(GENES.pbody, r), pvar: pick(GENES.pvar, r), gbody: pick(GENES.gbody, r), gvar: pick(GENES.gvar, r), ci: pick(GENES.ci, r),
+    kind: r() < .04 ? "rare" : pick(GENES.kind, r), rbody: pick(["comet", "moth"], r), abody: pick(GENES.abody, r), avar: pick(GENES.avar, r), pbody: pick(GENES.pbody, r), pvar: pick(GENES.pvar, r), gbody: pick(GENES.gbody, r), gvar: pick(GENES.gvar, r), ci: pick(GENES.ci, r),
     ec: w(EYE_C, [6, 1, 1, 1, 1, 1]), ps: Math.floor(r() * 1e6)};
 }
 function mixGenes(A, B, r = Math.random){
   const g = {};
   for (const k of Object.keys(GENES)){ const x = r(), a = A[k] ?? pick(GENES[k], r), b = B[k] ?? pick(GENES[k], r); g[k] = x < .46 ? a : x < .92 ? b : pick(GENES[k], r); }
   if (A.kind == null) g.kind = r() < .5 ? (B.kind || "critter") : "critter";
+  g.rbody = r() < .5 ? (A.rbody || "comet") : (B.rbody || "moth");
   g.ec = r() < .5 ? A.ec : B.ec; if (r() < .06) g.ec = pick(EYE_C, r);
   g.ps = r() < .5 ? A.ps : B.ps;
   return g;
@@ -2808,7 +2810,7 @@ function cLayer(g, m, {hl = true, shade = .35} = {}){
     if (edge){ g[y][x] = "#"; return; }
     const nx = (x + .5 - cx) / rx, ny = (y + .5 - cy) / ry, d = nx * .6 + ny;
     const shine = hl && ((x + .5 - (cx - rx * .42)) / Math.max(1.05, rx * .17)) ** 2 + ((y + .5 - (cy - ry * .46)) / Math.max(.8, ry * .13)) ** 2 <= 1;
-    g[y][x] = shine ? "w" : d > shade ? "s" : d < -.5 ? "h" : "l"; });
+    g[y][x] = shine ? "w" : d > Math.max(shade, .55) ? "s" : "l"; });
 }
 function cPut(g, x, y, rows, onBody = false){ rows.forEach((r, j) => [...r].forEach((ch, i) => { const X = x + i, Y = y + j; if (ch === " " || ch === "." || Y < 0 || Y > 23 || X < 0 || X > 23) return; if (onBody && !"lsw".includes(g[Y][X])) return; g[Y][X] = ch; })); }
 const EYES = {round: ["we", "ee", "ee"], sparkle: ["we", "ee", "ew"], dot: ["  ", "ee", "ee"]};
@@ -2820,6 +2822,22 @@ function faceOn(g, G, rx, cy, ry, cx = 12){
   if (G.cheek !== "none"){ cPut(g, lx - 2, ey + 3, ["bbb"], true); cPut(g, rxE + 1, ey + 3, ["bbb"], true); }
   const M = {smile: ["#..#", ".##."], cat: ["#.##.#", ".#..#."], open: [".##.", "#..#", ".##."], small: ["##"], tooth: ["####", ".#.."]}[G.mouth] || ["#..#", ".##."];
   cPut(g, Math.round(cx) - Math.floor(M[0].length / 2), ey + 4, M);
+}
+const EYE_P = {dot: ["ee", "ee"], big: ["we", "ee", "ee"], bar: ["e", "e", "e"], tiny: ["e"], happy: [".ee.", "e..e"], sleepy: ["eee"], wide: ["wee", "eee"]};
+const MOUTH_P = {w: ["#.#.#", ".#.#."], o: [".#.", "#.#", ".#."], grin: ["######", "#bbbb#", ".####."], smile: ["#..#", ".##."], line: ["###"], tongue: ["#..#", ".##.", ".bb."], teeth: [".##.", "#ww#"], cat: ["#.##.#", ".#..#."], small: ["##"], none: []};
+function faceX(g, F, cx, top, rx, h, tier){
+  const E = EYE_P[tier === 5 ? "sleepy" : F.eye] || EYE_P.dot, ew = E[0].length, eh = E.length, M = MOUTH_P[F.mouth] || [];
+  const ey = Math.round(top + F.ey * h), side = F.view === "left" ? -1 : F.view === "right" ? 1 : 0;
+  const onBody = (x, y) => "lhsdwpq".includes((g[y] || [])[x]);
+  const stamp = (x0, y0, rows) => rows.forEach((r, j) => [...r].forEach((c, i) => { if (c !== "." && (g[y0 + j] || [])[x0 + i] !== undefined) g[y0 + j][x0 + i] = c; }));
+  if (side){ const exc = cx + side * F.gap * rx, ex = Math.round(exc - ew / 2); stamp(ex, ey, E);
+    if (F.cheeks) [0, 1].forEach(i => { const x = ex + (side > 0 ? -2 + i : ew + i), y = ey + eh; if (onBody(x, y)) g[y][x] = "b"; });
+    if (M.length){ let mx = Math.round(cx + side * rx * .78 - (side > 0 ? M[0].length - 1 : 0)); stamp(mx, ey + eh + (F.mgap ?? 1), M); }
+    return; }
+  const lx = Math.round(cx - F.gap * rx - ew / 2), rxe = Math.round(cx + F.gap * rx - ew / 2);
+  stamp(lx, ey, E); stamp(rxe, ey, E.map(r => F.mirror ? [...r].reverse().join("") : r));
+  if (F.cheeks) [[lx - 2, ey + eh], [lx - 1, ey + eh], [rxe + ew, ey + eh], [rxe + ew + 1, ey + eh]].forEach(([x, y]) => { if (onBody(x, y)) g[y][x] = "b"; });
+  if (M.length) stamp(Math.round(cx - M[0].length / 2), ey + eh + (F.mgap ?? 1), M);
 }
 function armsOn(g, G, cy, ry){ if (G.arms !== "nubs") return; const ay = Math.round(cy + ry * .2), row = g[ay]; if (!row) return; const l = row.indexOf("#"), r = row.lastIndexOf("#"); if (l > 1) cPut(g, l - 2, ay - 1, [".#", "#l", ".#"]); if (r > -1 && r < 22) cPut(g, r + 1, ay - 1, ["#.", "l#", "#."]); }
 function cPoly(m, pts){ for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){ const px = x + .5, py = y + .5; let inside = false;
@@ -2856,7 +2874,7 @@ function gemGrid(G, stage, tier, f){
     const c1 = 3.8 * f + .3, c2 = 1.6 * f + .3, c3 = 3 * f + .3, c4 = 2 * f + .3;
     const m = cPoly(cMask(), [[12 - rx + c1, top], [12 + rx - c2, top + .4], [12 + rx, top + c2 + .4], [12 + rx, cy + ry - c3], [12 + rx - c3, cy + ry], [12 - rx + c4, cy + ry], [12 - rx, cy + ry - c4], [12 - rx, top + c1]]);
     cFlat(g, m, (x, y) => { const dx = (x + .5 - 11.2) / rx, dy = (y + .5 - cy + .6) / ry;
-      if (Math.abs(dx) < .52 && Math.abs(dy) < .46) return "h"; return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "l" : "d") : (dx < 0 ? "l" : "s"); });
+      if (Math.abs(dx) < .52 && Math.abs(dy) < .46) return "h"; return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "l" : "s") : (dx < 0 ? "l" : "s"); });
     g[Math.round(cy - ry * .32)][Math.round(12 - rx * .32)] = "w";
   } else {
     const m = cEll(cMask(), 12, cy, rx, ry); cEll(m, 12 - rx * .35, cy - ry * .45, rx * .55, ry * .6); cEll(m, 12 + rx * .4, cy + ry * .1, rx * .62, ry * .85);
@@ -2869,7 +2887,9 @@ function gemGrid(G, stage, tier, f){
   if (v === "geode"){ const band = top + 3.6 * f; for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if (inBody(x, y) && y + .5 < band + (x % 3 === 1 ? -.9 : 0)) g[y][x] = (x + y) % 3 === 0 ? "w" : (x + y) % 2 ? "p" : "q";
     for (let x = 0; x < 24; x++){ const y = Math.round(band + (x % 3 === 1 ? -.9 : 0)); if (inBody(x, y)) g[y][x] = "#"; } }
   if (v === "moss"){ for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){ const lim = top + 2.4 * f + (Math.sin(x * 1.3) + 1) * .9 + (x % 5 === 2 ? 1.4 : 0); if (inBody(x, y) && y + .5 < lim) g[y][x] = y + .5 > lim - 1 ? "x" : "v"; } }
-  faceOn(g, G, Math.min(rx, 8.5), body === "crystal" ? cy + 1 : cy, body === "crystal" ? ry * .6 : ry);
+  if (body === "cut") faceX(g, {eye: "big", gap: .36, ey: .3, mouth: "grin", cheeks: true}, 11.4, top, rx, 2 * ry, tier);
+  else if (body === "pebble") faceX(g, {view: "right", eye: "big", gap: .42, ey: .3, mouth: "line", mgap: 1, cheeks: true}, 12.6, top, rx, 2 * ry, tier);
+  else faceX(g, {eye: "bar", gap: .34, ey: .4, mouth: "small", mgap: 1, cheeks: true}, 12, top, rw, bottom - top, tier);
   armsOn(g, G, cy, ry);
   if (stage === "adult" && tier === 1) cPut(g, 1, Math.max(0, Math.round(top)), [".#.", "###", ".#."]);
   return g;
@@ -2907,7 +2927,9 @@ function plantGrid(G, stage, tier, f){
     cPut(g, 10, tY - 2, [".pp.", "pyyp", ".pp."]); }
   if (v === "mushroom"){ const cr = rx + 2.2, m = cEll(cMask(), 12.8, top + 2.4, cr, 4.6 * f + .8), keep = new Set(); m.forEach(k => { if ((k >> 5) <= top + 2.6) keep.add(k); });
     cFlat(g, keep, (x, y) => x + .5 > 12 + cr * .45 ? "q" : "p"); [[12 - cr * .45, top - 1], [12 + cr * .1, top - 2.2], [12 + cr * .5, top]].forEach(([x, y]) => { const X = Math.round(x), Y = Math.round(y); if ((g[Y] || [])[X] === "p" || (g[Y] || [])[X] === "q") g[Y][X] = "w"; }); }
-  faceOn(g, G, rx, body === "pot" ? cy - 1 : cy, ry);
+  if (body === "bulb") faceX(g, {eye: "dot", gap: .44, ey: .56, mouth: "smile", cheeks: true}, 11.6, top, rx, bottom - top, tier);
+  else if (body === "cactus") faceX(g, {eye: "dot", gap: .26, ey: .2, mouth: "small", cheeks: true}, 12, top, rx, bottom - top, tier);
+  else faceX(g, {eye: "wide", gap: .36, ey: .42, mouth: "none", cheeks: true, mirror: false}, 12, top, rx, 2 * ry, tier);
   if (body !== "pot") armsOn(g, G, cy, ry);
   if (stage === "adult" && tier === 1) cPut(g, 1, Math.max(0, tY), [".#.", "###", ".#."]);
   void inBody;
@@ -2929,44 +2951,71 @@ function animalGrid(G, stage, tier, f){
   if (v === "dog"){ const m = cMask(); cEll(m, tx + .6, ty - 1.2, 1.3, 1.6); cEll(m, tx + 1.8 * f, ty - 3.2 * f, 1.2, 1.7); layer(m, {hl: false}); }
   if (v === "bunny") layer(cEll(cMask(), tx, ty + .6, 2.3 * f + .3, 2.2 * f + .3));
   if (v === "bear") layer(cEll(cMask(), tx - .2, ty + 1, 1.6, 1.5), {hl: false});
+  const ehx = hx;
   // ears behind head
-  if (v === "cat"){ layer(cTri(cMask(), hx - rhx * .55, ht - 3.2 * f, 5.4 * f, .72), {hl: false}); layer(cTri(cMask(), hx + rhx * .55 + .6, ht - 2.6 * f, 4.8 * f, .72), {hl: false}); }
-  if (v === "bunny"){ layer(cEll(cMask(), hx - 2.6 * f, ht - 3.4 * f, 1.9 * f + .4, 4.8 * f), {hl: false});
-    const m = cEll(cMask(), hx + 2.8 * f, ht - 1.6 * f, 1.9 * f + .4, 3 * f); cEll(m, hx + 4.8 * f, ht - 3.8 * f, 2.3 * f, 1.5 * f + .3); layer(m, {hl: false}); }
-  if (v === "bear"){ layer(cEll(cMask(), hx - rhx * .72, ht + 1.2, 2.6 * f + .2, 2.6 * f + .2), {hl: false}); layer(cEll(cMask(), hx + rhx * .72, ht + 1.4, 2.6 * f + .2, 2.4 * f + .2), {hl: false}); }
-  if (v === "dog") layer(cEll(cMask(), hx + rhx * .62, ht + .6, 2.3 * f + .3, 2.4 * f), {hl: false});
+  if (v === "cat"){ layer(cTri(cMask(), ehx - rhx * .55, ht - 3.2 * f, 5.4 * f, .72), {hl: false}); layer(cTri(cMask(), ehx + rhx * .55 + .6, ht - 2.6 * f, 4.8 * f, .72), {hl: false}); }
+  if (v === "bunny"){ layer(cEll(cMask(), ehx - 2.6 * f, ht - 3.4 * f, 1.9 * f + .4, 4.8 * f), {hl: false});
+    const m = cEll(cMask(), ehx + 2.8 * f, ht - 1.6 * f, 1.9 * f + .4, 3 * f); cEll(m, ehx + 4.8 * f, ht - 3.8 * f, 2.3 * f, 1.5 * f + .3); layer(m, {hl: false}); }
+  if (v === "bear"){ layer(cEll(cMask(), ehx - rhx * .72, ht + 1.2, 2.6 * f + .2, 2.6 * f + .2), {hl: false}); layer(cEll(cMask(), ehx + rhx * .72, ht + 1.4, 2.6 * f + .2, 2.4 * f + .2), {hl: false}); }
+  if (v === "dog") layer(cEll(cMask(), ehx + rhx * .62, ht + .6, 2.3 * f + .3, 2.4 * f), {hl: false});
   // legs / body
   if (body === "stand"){ layer(cEll(cMask(), bx - 2.4 * f, bottom - 1.8, 1.9 * f + .3, 2.2), {hl: false}); layer(cEll(cMask(), bx + 2.6 * f, bottom - 1.6, 1.9 * f + .3, 2), {hl: false}); }
   layer(cEll(cMask(), bx, by, rbx, rby));
   if (body === "stand"){ layer(cEll(cMask(), bx - rbx - .2, by + .4, 1.3, 2.1), {hl: false}); layer(cEll(cMask(), bx + rbx + .9, by - 2.6, 1.3, 2.2), {hl: false}); }
   // head
-  layer(cEll(cMask(), hx, hy, rhx, rhy));
+  { const hm = cEll(cMask(), hx, hy, rhx, rhy);  layer(hm); }
   // inner ears
   const tint = (m, ch) => m.forEach(k => { const x = k % 32, y = k >> 5; if ("lhsw".includes(g[y][x])) g[y][x] = ch; });
-  if (v === "cat"){ tint(cTri(cMask(), hx - rhx * .55, ht - 1.6 * f, 2.6 * f, .5), "b"); tint(cTri(cMask(), hx + rhx * .55 + .6, ht - 1 * f, 2.2 * f, .5), "b"); }
-  if (v === "bunny"){ tint(cEll(cMask(), hx - 2.6 * f, ht - 3.4 * f, .7, 3.4 * f), "b"); }
-  if (v === "bear"){ tint(cEll(cMask(), hx - rhx * .72, ht + 1.2, 1.2 * f + .2, 1.2 * f + .2), "b"); tint(cEll(cMask(), hx + rhx * .72, ht + 1.4, 1.2 * f + .2, 1.1 * f + .2), "b"); }
+  if (v === "cat"){ tint(cTri(cMask(), ehx - rhx * .55, ht - 1.6 * f, 2.6 * f, .5), "b"); tint(cTri(cMask(), ehx + rhx * .55 + .6, ht - 1 * f, 2.2 * f, .5), "b"); }
+  if (v === "bunny"){ tint(cEll(cMask(), ehx - 2.6 * f, ht - 3.4 * f, .7, 3.4 * f), "b"); }
+  if (v === "bear"){ tint(cEll(cMask(), ehx - rhx * .72, ht + 1.2, 1.2 * f + .2, 1.2 * f + .2), "b"); tint(cEll(cMask(), ehx + rhx * .72, ht + 1.4, 1.2 * f + .2, 1.1 * f + .2), "b"); }
   // floppy dog ear in front (left)
   if (v === "dog"){ const m = cEll(cMask(), hx - rhx * .92, hy - rhy * .15, 2.1 * f + .3, 3.8 * f + .2); cFlat(g, m, (x) => x + .5 > hx - rhx * .92 ? "q" : "p"); }
   // muzzle
   const mY = hy + rhy * .34;
   if (v === "dog" || v === "bear") tint(cEll(cMask(), hx, mY, 3 * f + .4, 2 * f + .3), "h");
   // face
-  faceOn(g, G, rhx, hy, rhy, hx);
-  const gapE = Math.max(2, Math.round(rhx * .32)), ey = Math.round(hy - rhy * .12) - 1, nx = Math.round(hx) - 1;
-  if (v === "cat" || v === "bunny"){ cPut(g, nx, ey + 3, ["bb"]); }
-  if (v === "dog" || v === "bear"){ cPut(g, nx, ey + 3, ["##"]); }
-  if (v === "cat"){ const row = g[ey + 3] || []; const l = row.indexOf("#"), r = row.lastIndexOf("#"); if (l > 0){ g[ey + 3][l - 1] = "#"; g[ey + 5] && (g[ey + 5][l - 1] = "#"); } if (r > -1 && r < 23){ g[ey + 3][r + 1] = "#"; g[ey + 5] && (g[ey + 5][r + 1] = "#"); } }
-  void gapE;
+  const mouthV = {cat: "cat", dog: "tongue", bunny: "teeth", bear: "smile"}[v];
+  const FS = body === "loaf" ? {eye: "dot", gap: .42, ey: .36, mouth: mouthV, mgap: 1, cheeks: true}
+    : body === "stand" ? {eye: "happy", gap: .4, ey: .3, mouth: "grin", mgap: 1, cheeks: true}
+    : {eye: "big", gap: .4, ey: .3, mouth: mouthV, mgap: 1, cheeks: true};
+  if (v === "dog" || v === "bear") FS.mgap = 0;
+  faceX(g, FS, hx, ht, rhx, 2 * rhy, tier);
+  { const ey = Math.round(ht + FS.ey * 2 * rhy), E = EYE_P[FS.eye]; const ny = ey + E.length; const nx = Math.round(hx) - 1;
+    if (v === "dog" || v === "bear") cPut(g, nx, ny, ["##"]);
+    if (v === "cat"){ const row = g[ny] || []; const l = row.indexOf("#"), r = row.lastIndexOf("#"); if (l > 0){ g[ny][l - 1] = "#"; g[ny + 2] && (g[ny + 2][l - 1] = "#"); } if (r > -1 && r < 23){ g[ny][r + 1] = "#"; g[ny + 2] && (g[ny + 2][r + 1] = "#"); } } }
   // paws
   if (body === "sit") [[bx - 2.4 * f, bottom - .9], [bx + 1.6 * f, bottom - .9]].forEach(([x, y]) => layer(cEll(cMask(), x, y, 1.9 * f + .2, 1.3), {hl: false}));
   if (body === "loaf") [[hx - 1.8, bottom - .8], [hx + 2.2, bottom - .8]].forEach(([x, y]) => layer(cEll(cMask(), x, y, 1.8, 1.2), {hl: false}));
   if (stage === "adult" && tier === 1) cPut(g, 20, 1, [".#.", "###", ".#."]);
   return g;
 }
+function rareGrid(G, stage, tier, f){
+  const g = Array.from({length: 24}, () => Array(24).fill(".")), bottom = 22.4;
+  if ((G.rbody || "comet") === "comet"){
+    const rx = 6.8 * f + .5, ry = 6.4 * f + .5, cx = 10, cy = bottom - ry;
+    const tail = cMask(); [[1.1, -.2, 1], [1.7, -.6, .85], [2.3, -1.1, .68], [2.8, -1.7, .5]].forEach(([u, v, k]) => cEll(tail, cx + rx * u, cy + ry * v, rx * .55 * k + .4, ry * .5 * k + .4));
+    cFlat(g, tail, (x, y) => (x + y) % 5 === 0 ? "w" : y + .5 > cy - ry * .9 + (x - cx) * -.15 ? "q" : "p");
+    cLayer(g, cEll(cMask(), cx, cy, rx, ry));
+    cPut(g, Math.round(cx) - 2, Math.round(cy - ry) - 3, ["..#..", ".#p#.", "#ppp#", ".#p#."]);
+    faceX(g, {eye: "big", gap: .38, ey: .34, mouth: "o", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier);
+    if (stage !== "baby") cPut(g, Math.round(cx + rx * 1.6), Math.round(cy - ry * 1.4), [".w.", "w.w", ".w."]);
+  } else {
+    const rx = 4.6 * f + .6, ry = 6 * f + .5, cx = 12, cy = bottom - ry;
+    [-1, 1].forEach(sd => { const w = cEll(cMask(), cx + sd * (rx + 3.4 * f), cy - ry * .35, 4 * f + .6, 4.6 * f + .5); cEll(w, cx + sd * (rx + 2.6 * f), cy + ry * .45, 2.8 * f + .5, 2.8 * f + .3);
+      cFlat(g, w, (x, y) => { const d = (x + .5 - (cx + sd * (rx + 3.6 * f))) ** 2 + (y + .5 - (cy - ry * .4)) ** 2; return d < 2.2 ? "w" : d < 6 ? "q" : "p"; }); });
+    cLayer(g, cEll(cMask(), cx, cy, rx, ry));
+    const ty = Math.round(cy - ry); cPut(g, Math.round(cx) - 5, ty - 5, ["#........#", ".#......#.", "..#....#..", "...#..#...", "....##...."].map(r => r.replace(/\.##\./, ".##.")));
+    for (let y = Math.round(cy - ry * .25); y < Math.round(cy - ry * .25) + 2; y++) for (let x = 0; x < 24; x++) if (g[y][x] === "l" && (x + y) % 2) g[y][x] = "w";
+    faceX(g, {eye: "dot", gap: .5, ey: .2, mouth: "smile", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier);
+  }
+  if (stage === "adult" && tier === 1) cPut(g, 1, 1, [".#.", "###", ".#."]);
+  return g;
+}
 function creatureGrid(genes, stage, tier = 2){
   const key = JSON.stringify([genes, stage, tier]); if (CG.has(key)) return CG.get(key);
   const G = {...genes}, f = {baby: .64, child: .8, teen: .9, adult: 1}[stage] || 1;
+  if (G.kind === "rare"){ if (stage === "adult" && tier === 5) G.eyes = "sleepy"; const rows = rareGrid(G, stage, tier, f).map(r => r.join("")); CG.set(key, rows); return rows; }
   if ((G.kind === "plant" || G.kind === "gem" || G.kind === "animal") && G.pbody){
     if (stage === "adult" && tier === 5){ G.eyes = "sleepy"; G.mouth = "tooth"; }
     if (stage === "baby") G.arms = "none";
@@ -3038,8 +3087,8 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
     if (sleep && c === "w") c = "l";
     if (c === "e" && sleep){ if ((rows[y + 1] || "")[x] === "e"){ c = "l"; } else { push("ink", x, y); const one = row[x - 1] !== "e" && row[x + 1] !== "e" && row[x - 1] !== "w" && row[x + 1] !== "w"; if (one) push("ink", x + (x < width / 2 ? 1 : -1), y); continue; } }
     if (!genes){ push("lhpvy".includes(c) ? "l" : "sdqx".includes(c) ? "s" : c === "b" ? "b" : c === "w" ? "w" : "ink", x, y); continue; }
-    if (c === "#") push(mixC(COL.c, "#2a1f2c", .8), x, y);
-    else if (c === "e") push(genes.ec === "ink" ? "#241a26" : genes.ec, x, y);
+    if (c === "#") push("#2b2230", x, y);
+    else if (c === "e") push(genes.ec === "ink" ? "#1c141e" : genes.ec, x, y);
     else if (c === "w") push("#ffffff", x, y);
     else if (c === "h") push(mixC(markAt(x, y) ? (pat === "belly" ? mixC(COL.c, "#ffffff", .55) : COL.pc) : COL.c, "#ffffff", .38), x, y);
     else if (c === "d") push(shadeC(shadeC(COL.c)), x, y);
@@ -3125,6 +3174,7 @@ function pairSheet(aId){
     if (!B) return; $(".scrim")?.remove(); petSuitors = null; hatchFrom(A, B); });
 }
 function geneText(G){ const k = G.kind || "critter";
+  if (k === "rare") return `${KIND_N.rare} · ${G.rbody === "moth" ? "Moth" : "Comet"}`;
   const keys = k === "plant" ? ["kind", "pbody", "pvar", "feet", "arms"] : k === "gem" ? ["kind", "gbody", "gvar", "feet", "arms"] : k === "animal" ? ["kind", "abody", "avar", "pattern"] : ["kind", "shape", "top", "pattern", "feet", "arms"];
   return [...keys, "eyes", "mouth", "cheek"].map(x => `${GENE_N[x]}: ${x === "kind" ? KIND_N[k] : G[x]}`).join(" · "); }
 function treeSheet(id){
