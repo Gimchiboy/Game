@@ -2625,7 +2625,7 @@ function petOverlay(P){
     `<div class="pl">Hungry</div><div>${hearts(P.hunger)}</div>`,
     `<div class="pl">Happy</div><div>${hearts(P.happy)}</div>`,
     `<div class="pl">Discipline</div><div class="pbar"><i style="width:${P.disc}%"></i></div>`,
-    `<div class="pl">${esc(PET_FORMS[P.form])} · ${PET_STAGES[P.stage].n} · Gen ${P.gen || 1}</div><div>Age ${ageD} day${ageD === 1 ? "" : "s"} · ${P.weight} g</div>`,
+    `<div class="pl">${esc(PET_FORMS[P.form])} · ${PET_STAGES[P.stage].n} · Gen ${P.gen || 1}</div><div>Age ${ageD} day${ageD === 1 ? "" : "s"} · ${P.weight} g</div>${P.genes && P.genes.kind ? `<div class="sub2">${KIND_N[P.genes.kind]} · ${esc(colorsOf(P.genes).n)}</div>` : ""}`,
   ];
   return `<div class="pov" data-pet="status">${pages[(petStat - 1) % 4]}</div>`;
 }
@@ -2736,8 +2736,19 @@ const GENES = {
   mouth: ["smile", "cat", "open", "small", "tooth"],
   cheek: ["pink", "peach", "lilac", "none"],
   pattern: ["none", "spots", "belly", "stripes", "patch", "socks", "tips"],
+  kind: ["critter", "plant", "gem"],
+  pbody: ["bulb", "cactus", "pot"], pvar: ["sprout", "bloom", "spiky", "mushroom"],
+  gbody: ["cut", "pebble", "crystal"], gvar: ["spikes", "ore", "geode", "moss"],
+  ci: [0, 1, 2],
 };
-const GENE_N = {shape: "Body", top: "Head", feet: "Feet", arms: "Arms", eyes: "Eyes", mouth: "Mouth", cheek: "Cheeks", pattern: "Pattern"};
+const KIND_N = {critter: "Critter", plant: "Plant", gem: "Gem"};
+const KIND_C = {
+  critter: [["Peach", "#ffcdb5", "#d9603f"], ["Sky", "#bfe0ff", "#3f74c9"], ["Lilac", "#dccaff", "#8350c4"]],
+  plant: [["Leaf", "#a8dc8c", "#d9824a"], ["Teal", "#9fe0cf", "#e5658a"], ["Olive", "#c9d98a", "#9a5ad0"]],
+  gem: [["Ruby", "#f4919f", "#b8304a"], ["Gold", "#f6d872", "#c08a1e"], ["Slate", "#a9aab8", "#56586a"]],
+};
+const colorsOf = g => { if (g.ci == null && g.c) return {c: g.c, pc: g.pc, n: ""}; const k = KIND_C[g.kind || "critter"][g.ci || 0]; return {c: k[1], pc: k[2], n: k[0]}; };
+const GENE_N = {kind: "Type", shape: "Body", top: "Head", pbody: "Body", pvar: "Variant", gbody: "Body", gvar: "Variant", feet: "Feet", arms: "Arms", eyes: "Eyes", mouth: "Mouth", cheek: "Cheeks", pattern: "Pattern"};
 const BODY_C = ["#f6efe2", "#ffd8c2", "#ffc9d8", "#f7a9b8", "#fff1a8", "#c9f0d6", "#c6e3ff", "#ddccff", "#f0c9f3", "#dcb89c", "#d9d9d9", "#ffb8a2", "#d2e3c0", "#b9ece9"];
 const MARK_C = ["#8a5a44", "#d4527a", "#4a5a9a", "#4f8a5b", "#e0a92e", "#8a5aa8", "#5a5a5a", "#ffffff", "#f08a3c", "#3f9aa8"];
 const EYE_C = ["ink", "#5a3a2a", "#2f4f9a", "#2f7a4a", "#9a2f4a", "#6a3aa0"];
@@ -2751,13 +2762,13 @@ function randGenes(r = Math.random){
   const w = (opts, weights) => { let x = r() * weights.reduce((a, b) => a + b, 0); for (let i = 0; i < opts.length; i++){ x -= weights[i]; if (x < 0) return opts[i]; } return opts[0]; };
   return {shape: pick(GENES.shape, r), top: pick(GENES.top, r), feet: w(GENES.feet, [5, 2, 2, 1]), arms: w(GENES.arms, [3, 1]),
     eyes: w(GENES.eyes, [4, 3, 2, 2, 1]), mouth: w(GENES.mouth, [4, 3, 2, 2, 1]), cheek: w(GENES.cheek, [4, 2, 2, 1]), pattern: w(GENES.pattern, [3, 2, 2, 1, 1, 1, 1]),
-    c: pick(BODY_C, r), pc: pick(MARK_C, r), ec: w(EYE_C, [6, 1, 1, 1, 1, 1]), ps: Math.floor(r() * 1e6)};
+    kind: pick(GENES.kind, r), pbody: pick(GENES.pbody, r), pvar: pick(GENES.pvar, r), gbody: pick(GENES.gbody, r), gvar: pick(GENES.gvar, r), ci: pick(GENES.ci, r),
+    ec: w(EYE_C, [6, 1, 1, 1, 1, 1]), ps: Math.floor(r() * 1e6)};
 }
 function mixGenes(A, B, r = Math.random){
   const g = {};
-  for (const k of Object.keys(GENES)){ const x = r(); g[k] = x < .45 ? A[k] : x < .9 ? B[k] : pick(GENES[k], r); }
-  const col = (a, b, pool) => { const x = r(); return x < .32 ? a : x < .64 ? b : x < .94 ? mixC(a, b, .5) : pick(pool, r); };
-  g.c = col(A.c, B.c, BODY_C); g.pc = col(A.pc, B.pc, MARK_C);
+  for (const k of Object.keys(GENES)){ const x = r(), a = A[k] ?? pick(GENES[k], r), b = B[k] ?? pick(GENES[k], r); g[k] = x < .46 ? a : x < .92 ? b : pick(GENES[k], r); }
+  if (A.kind == null) g.kind = r() < .5 ? (B.kind || "critter") : "critter";
   g.ec = r() < .5 ? A.ec : B.ec; if (r() < .06) g.ec = pick(EYE_C, r);
   g.ps = r() < .5 ? A.ps : B.ps;
   return g;
@@ -2779,9 +2790,105 @@ function cLayer(g, m, {hl = true, shade = .35} = {}){
 }
 function cPut(g, x, y, rows, onBody = false){ rows.forEach((r, j) => [...r].forEach((ch, i) => { const X = x + i, Y = y + j; if (ch === " " || Y < 0 || Y > 23 || X < 0 || X > 23) return; if (onBody && !"lsw".includes(g[Y][X])) return; g[Y][X] = ch; })); }
 const EYES = {round: ["we", "ee", "ee"], sparkle: ["we", "ee", "ew"], dot: ["  ", "ee", "ee"]};
+function faceOn(g, G, rx, cy, ry, cx = 12){
+  const gap = Math.max(2, Math.round(rx * .32)), lx = Math.round(cx) - 2 - gap, rxE = Math.round(cx) + gap, ey = Math.round(cy - ry * .12) - 1;
+  if (G.eyes === "happy"){ cPut(g, lx - 1, ey + 1, [".ee.", "e..e"]); cPut(g, rxE - 1, ey + 1, [".ee.", "e..e"]); }
+  else if (G.eyes === "sleepy"){ cPut(g, lx - 1, ey + 2, ["eee"]); cPut(g, rxE, ey + 2, ["eee"]); }
+  else { const E = EYES[G.eyes] || EYES.round; cPut(g, lx, ey, E); cPut(g, rxE, ey, E); }
+  if (G.cheek !== "none"){ cPut(g, lx - 2, ey + 3, ["bbb"], true); cPut(g, rxE + 1, ey + 3, ["bbb"], true); }
+  const M = {smile: ["#..#", ".##."], cat: ["#.##.#", ".#..#."], open: [".##.", "#..#", ".##."], small: ["##"], tooth: ["####", ".#.."]}[G.mouth] || ["#..#", ".##."];
+  cPut(g, Math.round(cx) - Math.floor(M[0].length / 2), ey + 4, M);
+}
+function armsOn(g, G, cy, ry){ if (G.arms !== "nubs") return; const ay = Math.round(cy + ry * .25), row = g[ay]; if (!row) return; const l = row.indexOf("#"), r = row.lastIndexOf("#"); if (l > 1) cPut(g, l - 2, ay, ["##", "##"]); if (r > -1 && r < 22) cPut(g, r + 1, ay, ["##", "##"]); }
+function cPoly(m, pts){ for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){ const px = x + .5, py = y + .5; let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside; }
+  if (inside) m.add(y * 32 + x); } return m; }
+function cFlat(g, m, cls){ m.forEach(k => { const x = k % 32, y = k >> 5; const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !m.has((y + dy) * 32 + x + dx)); g[y][x] = edge ? "#" : cls(x, y); }); }
+function feetOn(g, G, f, bottom){
+  const L = [];
+  if (G.feet === "stubby") L.push(cEll(cMask(), 12 - 4 * f, bottom + .9, 2.8 * f + .2, 2.1), cEll(cMask(), 12 + 4 * f, bottom + .9, 2.8 * f + .2, 2.1));
+  if (G.feet === "tiny") L.push(cEll(cMask(), 12 - 3 * f, bottom + .7, 1.9 * f + .3, 1.6), cEll(cMask(), 12 + 3 * f, bottom + .7, 1.9 * f + .3, 1.6));
+  if (G.feet === "long") L.push(cEll(cMask(), 12 - 3.4 * f, bottom + 1.6, 2 * f + .3, 2.9), cEll(cMask(), 12 + 3.4 * f, bottom + 1.6, 2 * f + .3, 2.9));
+  L.forEach(m => cLayer(g, m, {hl: false}));
+}
+function hashR(seed){ let s = (seed || 1) % 2147483647; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function gemGrid(G, stage, tier, f){
+  const g = Array.from({length: 24}, () => Array(24).fill(".")), body = G.gbody, v = stage === "baby" ? "none" : G.gvar;
+  const bottom = G.feet === "none" ? 23 : 21.2;
+  let rx, ry, cy, top;
+  if (G.feet !== "none") feetOn(g, {...G, feet: "tiny"}, f, bottom);
+  const spikesH = v === "spikes" ? 6.5 * f : 0;
+  const rw = 5.6 * f + .6, H = Math.min(16.5 * f, bottom - spikesH - 1), tip = 4 * f;
+  if (body === "crystal"){ top = bottom - H; rx = rw; ry = H / 2; cy = top + H / 2 + tip * .4; }
+  else if (body === "cut"){ rx = 8.6 * f + .4; ry = Math.min(7.4 * f + .3, (bottom - spikesH - 1) / 2); cy = bottom - ry; top = cy - ry; }
+  else { rx = 9.4 * f + .4; ry = Math.min(7 * f + .3, (bottom - spikesH - 1) / 2.1); cy = bottom - ry; top = cy - ry * 1.05; }
+  if (v === "spikes") [[12 - 4.4 * f, 5 * f], [12, 7 * f], [12 + 4.4 * f, 5 * f]].forEach(([cx, h]) => {
+    const t = top + 1.6 - h, w = 2.1 * f + .5; cFlat(g, cPoly(cMask(), [[cx, t], [cx + w, t + h * .5], [cx + w, top + 3], [cx - w, top + 3], [cx - w, t + h * .5]]), x => x + .5 < cx ? "h" : "s"); });
+  if (body === "crystal"){
+    const m = cPoly(cMask(), [[12, top], [12 + rw, top + tip], [12 + rw, bottom - .6], [12 + rw - 1.4, bottom], [12 - rw + 1.4, bottom], [12 - rw, bottom - .6], [12 - rw, top + tip]]);
+    cFlat(g, m, (x, y) => { const dx = x + .5 - 12, tipZone = y + .5 < top + tip + Math.abs(dx) * .1 + .8;
+      if (tipZone) return dx < 0 ? "h" : "l"; if (Math.abs(dx) < rw * .38) return "h"; return dx < 0 ? "l" : "s"; });
+  } else if (body === "cut"){
+    const c = 3 * f + .3;
+    const m = cPoly(cMask(), [[12 - rx + c, top], [12 + rx - c, top], [12 + rx, top + c], [12 + rx, cy + ry - c], [12 + rx - c, cy + ry], [12 - rx + c, cy + ry], [12 - rx, cy + ry - c], [12 - rx, top + c]]);
+    cFlat(g, m, (x, y) => { const dx = (x + .5 - 12) / rx, dy = (y + .5 - cy) / ry;
+      if (Math.abs(dx) < .58 && Math.abs(dy) < .5) return "h"; return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "l" : "d") : (dx < 0 ? "l" : "s"); });
+    g[Math.round(cy - ry * .32)][Math.round(12 - rx * .32)] = "w";
+  } else {
+    const m = cEll(cMask(), 12, cy, rx, ry); cEll(m, 12 - rx * .35, cy - ry * .45, rx * .55, ry * .6); cEll(m, 12 + rx * .4, cy + ry * .1, rx * .62, ry * .85);
+    cLayer(g, m);
+  }
+  const inBody = (x, y) => "lhsdw".includes((g[y] || [])[x]);
+
+  if (v === "ore"){ const r = hashR(G.ps); for (let i = 0; i < 6; i++){ const x = Math.round(12 + (r() - .5) * rx * 1.4), y = Math.round(cy + (r() - .2) * ry * .9); if (inBody(x, y)) g[y][x] = "p"; if (inBody(x + 1, y) && r() < .6) g[y][x + 1] = "q"; } }
+  if (v === "geode"){ const band = top + 3.6 * f; for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if (inBody(x, y) && y + .5 < band + (x % 3 === 1 ? -.9 : 0)) g[y][x] = (x + y) % 3 === 0 ? "w" : (x + y) % 2 ? "p" : "q";
+    for (let x = 0; x < 24; x++){ const y = Math.round(band + (x % 3 === 1 ? -.9 : 0)); if (inBody(x, y)) g[y][x] = "#"; } }
+  if (v === "moss"){ for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){ const lim = top + 2.4 * f + (Math.sin(x * 1.3) + 1) * .9 + (x % 5 === 2 ? 1.4 : 0); if (inBody(x, y) && y + .5 < lim) g[y][x] = y + .5 > lim - 1 ? "x" : "v"; } }
+  faceOn(g, G, Math.min(rx, 8.5), body === "crystal" ? cy + 1 : cy, body === "crystal" ? ry * .6 : ry);
+  armsOn(g, G, cy, ry);
+  if (stage === "adult" && tier === 1) cPut(g, 1, Math.max(0, Math.round(top)), [".#.", "###", ".#."]);
+  return g;
+}
+function plantGrid(G, stage, tier, f){
+  const g = Array.from({length: 24}, () => Array(24).fill(".")), body = G.pbody, v = stage === "baby" ? "sprout" : G.pvar;
+  const capH = v === "mushroom" ? 2 : v === "bloom" ? 8 : v === "sprout" ? 6 : 2;
+  let bottom = (G.feet === "none" || body === "pot") ? 23 : 21.2, rx, ry, cy, top;
+  if (body !== "pot" && G.feet !== "none") feetOn(g, {...G, feet: G.feet === "long" ? "stubby" : G.feet}, f, bottom);
+  if (body === "cactus"){
+    const rw = 6.2 * f + .5, H = Math.min(16 * f + 1, bottom - capH - .5); top = bottom - H; rx = rw; ry = H / 2; cy = top + H / 2;
+    const m = cEll(cMask(), 12, top + rw, rw, rw); for (let y = Math.ceil(top + rw); y < bottom - 1; y++) for (let x = Math.round(12 - rw); x < Math.round(12 + rw); x++) m.add(y * 32 + x);
+    cEll(m, 12, bottom - 1.6, rw, 1.6); cLayer(g, m);
+    for (let y = Math.round(top + 3); y < bottom - 2; y++) for (const x of [Math.round(12 - rw * .45), Math.round(12 + rw * .45) - 1]) if (g[y][x] === "l" || g[y][x] === "s") g[y][x] = "s";
+  } else if (body === "pot"){
+    rx = 8.4 * f + .4; ry = 6.4 * f + .3; const potH = 6 * f + 1, potTop = bottom - potH; cy = potTop - ry * .55; top = cy - ry;
+    cLayer(g, cEll(cMask(), 12, cy, rx, ry));
+    const pw = rx * .95, m = cPoly(cMask(), [[12 - pw, potTop], [12 + pw, potTop], [12 + pw * .78, bottom], [12 - pw * .78, bottom]]);
+    const rim = cPoly(cMask(), [[12 - pw - 1, potTop - 1], [12 + pw + 1, potTop - 1], [12 + pw + 1, potTop + 1.6], [12 - pw - 1, potTop + 1.6]]);
+    cFlat(g, m, (x) => x + .5 > 12 + pw * .35 ? "q" : "p"); cFlat(g, rim, (x) => x + .5 > 12 + pw * .5 ? "q" : "p");
+  } else {
+    rx = 9 * f + .4; ry = 7.2 * f + .3; cy = bottom - ry; top = cy - ry * 1.15;
+    const m = cEll(cMask(), 12, cy, rx, ry); cEll(m, 12, cy - ry * .78, rx * .42, ry * .5); cLayer(g, m);
+  }
+  const tY = Math.round(top), inBody = (x, y) => "lhsdw".includes((g[y] || [])[x]);
+  if (v === "sprout") cPut(g, 5, tY - 6, [".###......###.", "#vvv#....#vvv#", "#vvvv#..#vvvv#", ".#xvvx##xvvx#.", "..####..####..", "......##......"]);
+  if (v === "bloom") cPut(g, 8, tY - 8, ["...###...", "..#ppp#..", ".##ppp##.", "#pp#y#pp#", "#pp#y#pp#", ".##ppp##.", "..#ppp#..", "...###...", "....#...."]);
+  if (v === "spiky"){ g.forEach((row, y) => row.forEach((c, x) => { if (c === "#" && y < cy + ry * .5 && (x * 7 + y * 3) % 5 === 0){ const ox = x < 12 ? -1 : 1; if (g[y][x + ox] === ".") g[y][x + ox] = "#"; } }));
+    cPut(g, 10, tY - 2, [".pp.", "pyyp", ".pp."]); }
+  if (v === "mushroom"){ const cr = rx + 2.2, m = cEll(cMask(), 12, top + 2.2, cr, 4.6 * f + .8), keep = new Set(); m.forEach(k => { if ((k >> 5) <= top + 2.6) keep.add(k); });
+    cFlat(g, keep, (x, y) => x + .5 > 12 + cr * .45 ? "q" : "p"); [[12 - cr * .45, top - 1], [12 + cr * .1, top - 2.2], [12 + cr * .5, top]].forEach(([x, y]) => { const X = Math.round(x), Y = Math.round(y); if ((g[Y] || [])[X] === "p" || (g[Y] || [])[X] === "q") g[Y][X] = "w"; }); }
+  faceOn(g, G, rx, body === "pot" ? cy - 1 : cy, ry);
+  if (body !== "pot") armsOn(g, G, cy, ry);
+  if (stage === "adult" && tier === 1) cPut(g, 1, Math.max(0, tY), [".#.", "###", ".#."]);
+  void inBody;
+  return g;
+}
 function creatureGrid(genes, stage, tier = 2){
   const key = JSON.stringify([genes, stage, tier]); if (CG.has(key)) return CG.get(key);
   const G = {...genes}, f = {baby: .64, child: .8, teen: .9, adult: 1}[stage] || 1;
+  if ((G.kind === "plant" || G.kind === "gem") && G.pbody){
+    if (stage === "adult" && tier === 5){ G.eyes = "sleepy"; G.mouth = "tooth"; }
+    if (stage === "baby") G.arms = "none";
+    const gg = (G.kind === "plant" ? plantGrid : gemGrid)(G, stage, tier, f), rows = gg.map(r => r.join("")); CG.set(key, rows); return rows; }
   if (stage === "baby"){ G.top = "curl"; G.arms = "none"; G.feet = G.feet === "none" ? "none" : "tiny"; }
   if (stage === "adult" && tier === 4) G.top = "fringe";
   if (stage === "adult" && tier === 5){ G.eyes = "sleepy"; G.mouth = "tooth"; }
@@ -2812,16 +2919,8 @@ function creatureGrid(genes, stage, tier = 2){
   // inner ear colour
   if (G.top === "bunny") for (let y = 0; y < 24; y++) for (const x of [Math.round(12 - 3.6 * f - .9), Math.round(12 - 3.6 * f - .4) , Math.round(12 + 3.6 * f), Math.round(12 + 3.6 * f + .5)]) if (y < top + 1 && g[y][x] === "l") g[y][x] = "b";
   if (G.top === "bear") [12 - rx * .62, 12 + rx * .62].forEach(cx => { const m = cEll(cMask(), cx, top + 1.6, 1.4 * f, 1.4 * f); m.forEach(k => { const x = k % 32, y = k >> 5; if (g[y][x] === "l" || g[y][x] === "s") g[y][x] = "b"; }); });
-  // face
-  const gap = Math.max(2, Math.round(rx * .32)), lx = 10 - gap, rxE = 12 + gap, ey = Math.round(cy - ry * .12) - 1;
-  if (G.eyes === "happy"){ cPut(g, lx - 1, ey + 1, [".ee.", "e..e"]); cPut(g, rxE - 1, ey + 1, [".ee.", "e..e"]); }
-  else if (G.eyes === "sleepy"){ cPut(g, lx - 1, ey + 2, ["eee"]); cPut(g, rxE, ey + 2, ["eee"]); }
-  else { const E = EYES[G.eyes] || EYES.round; cPut(g, lx, ey, E); cPut(g, rxE, ey, E); }
-  if (G.cheek !== "none"){ cPut(g, lx - 2, ey + 3, ["bbb"], true); cPut(g, rxE + 1, ey + 3, ["bbb"], true); }
-  const M = {smile: ["#..#", ".##."], cat: ["#.##.#", ".#..#."], open: [".##.", "#..#", ".##."], small: ["##"], tooth: ["####", ".#.."]}[G.mouth] || ["#..#", ".##."];
-  cPut(g, 12 - Math.floor(M[0].length / 2), ey + 4, M);
-  // arms
-  if (G.arms === "nubs"){ const ay = Math.round(cy + ry * .25); const row = g[ay]; if (row){ const l = row.indexOf("#"), r = row.lastIndexOf("#"); if (l > 1) cPut(g, l - 2, ay, ["##", "##"]); if (r > -1 && r < 22) cPut(g, r + 1, ay, ["##", "##"]); } }
+  faceOn(g, G, rx, cy, ry);
+  armsOn(g, G, cy, ry);
   // features in front / on top
   const tY = Math.round(top);
   if (G.top === "antenna"){ cPut(g, 8, tY - 4, ["#......#", ".#....#.", "..#..#..", "..#..#.."]); }
@@ -2840,8 +2939,9 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
   rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== ".") { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } }));
   const W = x1 - x0 + 1, H = y1 - y0 + 1;
   let spots = [];
-  if (genes && genes.pattern === "spots"){ let s = genes.ps || 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 4; i++) spots.push([x0 + W * (.2 + r() * .6), y0 + H * (.35 + r() * .5)]); }
-  const markAt = (x, y) => { if (!genes) return false; const u = (x - x0) / W, v = (y - y0) / H;
+  const COL = genes ? colorsOf(genes) : null, crit = genes && (genes.kind || "critter") === "critter";
+  if (genes && crit && genes.pattern === "spots"){ let s = genes.ps || 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 4; i++) spots.push([x0 + W * (.2 + r() * .6), y0 + H * (.35 + r() * .5)]); }
+  const markAt = (x, y) => { if (!genes || !crit) return false; const u = (x - x0) / W, v = (y - y0) / H;
     switch (genes.pattern){
       case "spots": return spots.some(([sx, sy]) => (x + .5 - sx) ** 2 + (y + .5 - sy) ** 2 <= 2.2);
       case "belly": return ((u - .5) / .26) ** 2 + ((v - .74) / .2) ** 2 <= 1;
@@ -2854,12 +2954,19 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
   rows.forEach((row, y) => { for (let x = 0; x < width; x++){ let c = row[x]; if (c === ".") continue;
     if (sleep && c === "w") c = "l";
     if (c === "e" && sleep){ if ((rows[y + 1] || "")[x] === "e"){ c = "l"; } else { push("ink", x, y); const one = row[x - 1] !== "e" && row[x + 1] !== "e" && row[x - 1] !== "w" && row[x + 1] !== "w"; if (one) push("ink", x + (x < width / 2 ? 1 : -1), y); continue; } }
-    if (!genes){ push(c === "l" ? "l" : c === "s" ? "s" : c === "b" ? "b" : c === "w" ? "w" : "ink", x, y); continue; }
+    if (!genes){ push("lhpvy".includes(c) ? "l" : "sdqx".includes(c) ? "s" : c === "b" ? "b" : c === "w" ? "w" : "ink", x, y); continue; }
     if (c === "#") push("ink", x, y);
     else if (c === "e") push(genes.ec === "ink" ? "ink" : genes.ec, x, y);
     else if (c === "w") push("#ffffff", x, y);
+    else if (c === "h") push(mixC(COL.c, "#ffffff", .5), x, y);
+    else if (c === "d") push(shadeC(shadeC(COL.c)), x, y);
+    else if (c === "p") push(COL.pc, x, y);
+    else if (c === "q") push(shadeC(COL.pc), x, y);
+    else if (c === "v") push("#8fd07a", x, y);
+    else if (c === "x") push("#5f9e55", x, y);
+    else if (c === "y") push("#ffd45e", x, y);
     else if (c === "b") push(CHEEK_C[genes.cheek] || "#f0889a", x, y);
-    else if (c === "l" || c === "s"){ const base = genes.pattern === "belly" && markAt(x, y) ? mixC(genes.c, "#ffffff", .55) : markAt(x, y) ? genes.pc : genes.c; push(c === "s" ? shadeC(base) : base, x, y); }
+    else if (c === "l" || c === "s"){ const base = crit && genes.pattern === "belly" && markAt(x, y) ? mixC(COL.c, "#ffffff", .55) : markAt(x, y) ? COL.pc : COL.c; push(c === "s" ? shadeC(base) : base, x, y); }
   } });
   const X = x => ox + (flip ? width - 1 - x : x);
   return Object.entries(fills).map(([f, pts]) => {
@@ -2934,6 +3041,9 @@ function pairSheet(aId){
     const B = b.dataset.mateSrc === "npc" ? petSuitors.find(x => x.id === b.dataset.mate) : bookGet(b.dataset.mate);
     if (!B) return; $(".scrim")?.remove(); petSuitors = null; hatchFrom(A, B); });
 }
+function geneText(G){ const k = G.kind || "critter";
+  const keys = k === "plant" ? ["kind", "pbody", "pvar"] : k === "gem" ? ["kind", "gbody", "gvar"] : ["kind", "shape", "top", "pattern"];
+  return [...keys, "feet", "arms", "eyes", "mouth", "cheek"].map(x => `${GENE_N[x]}: ${x === "kind" ? KIND_N[k] : G[x]}`).join(" · "); }
 function treeSheet(id){
   const all_ = [...book()], cur = pet(); if (cur && cur.id) all_.push({...cur, status: "current"});
   const get = i => all_.find(x => x.id === i);
@@ -2946,8 +3056,8 @@ function treeSheet(id){
     ${ps.length ? `<div class="fld"><span>Parents</span><div class="trow">${ps.map(node).join("")}</div></div>` : ""}
     <div class="fld"><span>${esc(me.name || PET_FORMS[me.form])}</span><div class="trow">${node(me)}</div></div>
     ${kids.length ? `<div class="fld"><span>Children</span><div class="trow">${kids.map(node).join("")}</div></div>` : ""}
-    <div class="fld"><span>Genes</span><div class="sub">${Object.keys(GENE_N).map(k => `${GENE_N[k]}: ${me.genes ? me.genes[k] : "classic"}`).join(" · ")}</div>
-      ${me.genes ? `<div class="chips" style="margin-top:8px"><span class="swatch" style="--sw:${me.genes.c}"></span><span class="swatch" style="--sw:${me.genes.pc}"></span></div>` : ""}</div>`, () => {}, null, "Close");
+    <div class="fld"><span>Genes</span><div class="sub">${me.genes ? geneText(me.genes) : "Classic"}</div>
+      ${me.genes ? `<div class="chips" style="margin-top:8px;align-items:center"><span class="swatch" style="--sw:${colorsOf(me.genes).c}"></span><span class="swatch" style="--sw:${colorsOf(me.genes).pc}"></span><span class="sub">${esc(colorsOf(me.genes).n)}</span></div>` : ""}</div>`, () => {}, null, "Close");
 }
 function bookSheet(id){
   const e = bookGet(id); if (!e) return;
