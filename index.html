@@ -8,9 +8,6 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Mono:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500&family=Space+Grotesk:wght@400;500&family=Space+Mono:wght@400;700&family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&display=swap" rel="stylesheet">
 <style>
@@ -792,14 +789,14 @@ const REMIND = [["","None"],["0","At start time"],["5","5 minutes before"],["10"
 function habitsList(){ return all("habit").filter(h => !h.archived).sort((a,b) => (a.order||0)-(b.order||0)); }
 function dayDoc(d){ return items["day-" + d] || {kind:"day", date:d, done:{}, reflect:""}; }
 const UNITS = {glasses:{ml:240, n:"glasses", step:1}, cups:{ml:240, n:"cups", step:1}, oz:{ml:29.5735, n:"oz", step:8}, ml:{ml:1, n:"ml", step:250}, bottles:{ml:500, n:"bottles", step:1}};
-const DEF_MEALS = [{id:"b", name:"Breakfast"}, {id:"l", name:"Lunch"}, {id:"d", name:"Dinner"}];
+const OLD_MEALS = {b:"Breakfast", l:"Lunch", d:"Dinner"};
 function cfg(){
   const s = items.settings || {}, w = s.water || {}, m = s.mealsCfg || {}, sl = s.sleepCfg || {};
   const unit = UNITS[w.unit] ? w.unit : "glasses";
   return {
     water: {on: w.on !== false, unit, step: w.step > 0 ? w.step : UNITS[unit].step, weight: w.weight > 0 ? w.weight : null, auto: !!w.auto && w.weight > 0,
       goal: (w.auto && w.weight > 0) ? (unit === "oz" ? Math.round(w.weight / 2) : unit === "ml" ? Math.round(w.weight / 2 * 29.5735 / 10) * 10 : r1(w.weight / 2 * 29.5735 / UNITS[unit].ml)) : (w.goal > 0 ? w.goal : (s.waterGoal || 8))},
-    meals: {on: m.on !== false, list: Array.isArray(m.list) && m.list.length ? m.list : DEF_MEALS},
+    meals: {on: m.on !== false, list: (Array.isArray(m.list) ? m.list : []).filter(x => !(OLD_MEALS[x.id] && OLD_MEALS[x.id] === x.name))},
     sleep: {on: sl.on !== false, goal: sl.goal > 0 ? sl.goal : (s.sleepGoal || 8)},
     journal: {on: s.journalOn !== false},
     agenda: {on: s.agendaOn !== false},
@@ -1439,7 +1436,7 @@ async function scanBarcode(onCode){
 const repeats = () => all("foodRepeat").sort((a, b) => { const o = id => { const i = foodMeals().findIndex(m => m.id === id); return i < 0 ? 99 : i; }; return o(a.meal) - o(b.meal) || (a.created || 0) - (b.created || 0); });
 const plannedFor = d => repeats().filter(r => (r.days || []).includes(parse(d).getDay()));
 const eatenRepeat = (d, rid) => eatsOf(d).find(e => e.repeatId === rid);
-const mealName = id => (foodMeals().find(m => m.id === id) || {name: "Other"}).name;
+const mealName = id => (foodMeals().find(m => m.id === id) || {name: "No meal"}).name;
 const dayLetters = days => DOW.map((n, i) => `<span class="dl ${days.includes(i) ? "on" : ""}">${n.slice(0, 1)}</span>`).join("");
 function togglePlanned(d, rid){
   const r = items[rid]; if (!r) return;
@@ -1458,14 +1455,14 @@ function viewRepeats(){
   <div class="card" style="margin-top:12px">${rs.length ? rs.map(r => `<div class="row tap" data-repeat="${r.id}"><div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round(r.kcal * (r.qty || 1))} cal · P ${Math.round(r.p * (r.qty || 1))} · C ${Math.round(r.c * (r.qty || 1))} · F ${Math.round(r.f * (r.qty || 1))}</div><div class="dls">${dayLetters(r.days || [])}</div></div><span class="sub">›</span></div>`).join("") : `<div class="empty">No repeats yet.</div>`}</div>`;
 }
 function repeatSheet(id){
-  const x = id ? items[id] : {name: "", qty: 1, meal: (foodMeals()[0] || {}).id, kcal: "", p: "", c: "", f: "", days: [1, 2, 3, 4, 5]};
+  const x = id ? items[id] : {name: "", qty: 1, meal: (foodMeals()[0] || {id: ""}).id, kcal: "", p: "", c: "", f: "", days: [1, 2, 3, 4, 5]};
   const recent = myFoods().slice(0, 12);
   sheet(id ? "Edit repeat" : "New repeat", `
     ${id ? "" : `<div class="fld"><span>Search foods</span><div class="quick" style="margin-top:0"><input id="fs-q" placeholder="Search" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-fs-go>Search</button>${"BarcodeDetector" in window ? `<button type="button" class="btn" data-fs-scan aria-label="Scan barcode">Scan</button>` : ""}</div><div id="fs-out" class="fsout"></div></div>`}
     ${!id && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(f => `<button type="button" class="chip" data-pick="${f.id}">${esc(f.name)}</button>`).join("")}</div></div>` : ""}
     <label class="fld"><span>Food</span><input name="name" value="${esc(x.name)}" required></label>
     <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.1" step="any" inputmode="decimal" value="${x.qty || 1}"></label>
-      <label class="fld"><span>Meal</span><select name="meal">${foodMeals().map(m => `<option value="${esc(m.id)}" ${x.meal===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></label></div>
+      <label class="fld"><span>Meal</span>${mealSelect(x.meal)}</label></div>
     <div class="fld"><span>Days</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${(x.days||[]).includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${(x.days||[]).join(",")}">
       <div class="chips" style="margin-top:6px"><button type="button" class="link" data-days="0,1,2,3,4,5,6" style="padding:2px 0">Every day</button><button type="button" class="link" data-days="1,2,3,4,5" style="padding:2px 0">Weekdays</button><button type="button" class="link" data-days="0,6" style="padding:2px 0">Weekends</button></div></div>
     <div class="sub" style="margin:-2px 0 8px" id="fs-serv">Per serving</div>
@@ -1483,7 +1480,7 @@ function repeatSheet(id){
     },
     id ? () => confirmSheet("Delete this repeat?", "It stops showing on Today. Days you already logged keep their entries.", () => del(id)) : null);
   const S = $(".sheet");
-  wireFoodSearch(S);
+  wireFoodSearch(S); wireMealSelect(S);
   S.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const m = items[b.dataset.pick]; if (!m) return;
     S.querySelector("[name=name]").value = m.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = m[k] ?? "");
     S.querySelectorAll("[data-pick]").forEach(y => y.classList.toggle("on", y === b)); });
@@ -1497,7 +1494,25 @@ const eatsOf = d => ((items["day-" + d] || {}).eats || []);
 const sumEats = es => es.reduce((a, e) => { const q = +e.qty || 1; a.kcal += (+e.kcal || 0) * q; a.p += (+e.p || 0) * q; a.c += (+e.c || 0) * q; a.f += (+e.f || 0) * q; return a; }, {kcal: 0, p: 0, c: 0, f: 0});
 const myFoods = () => all("foodItem").sort((a, b) => (b.last || 0) - (a.last || 0));
 const r0 = v => Math.round(v);
-function foodMeals(){ return [...cfg().meals.list, {id: "other", name: "Other"}]; }
+function foodMeals(){ return cfg().meals.list; }
+const hasMeal = id => foodMeals().some(m => m.id === id);
+function mealSelect(cur){ const v = hasMeal(cur) ? cur : "";
+  return `<select name="meal" data-mealsel><option value="" ${v===""?"selected":""}>No meal</option>${foodMeals().map(m => `<option value="${esc(m.id)}" ${v===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}<option value="__new">+ New meal…</option></select>`; }
+function wireMealSelect(S){
+  S.querySelectorAll("select[data-mealsel]").forEach(sel => { let prev = sel.value;
+    sel.onchange = () => { if (sel.value !== "__new"){ prev = sel.value; return; }
+      sel.value = prev; if (S.querySelector(".newmeal")) return S.querySelector(".newmeal input").focus();
+      const row = sel.closest(".two") || sel.closest(".fld"), box = document.createElement("div");
+      box.className = "fld newmeal"; box.innerHTML = `<span>New meal</span><div class="quick" style="margin-top:0"><input placeholder="Meal name" autocomplete="off" enterkeyhint="done"><button type="button" class="btn pri" data-nm-add>Add</button><button type="button" class="btn" data-nm-x>Cancel</button></div>`;
+      row.after(box); const inp = box.querySelector("input"); setTimeout(() => inp.focus(), 30);
+      const add = () => { const name = inp.value.trim(); if (!name) return inp.focus();
+        const c = cfg(), ex = c.meals.list.find(m => m.name.toLowerCase() === name.toLowerCase()), id = ex ? ex.id : uid();
+        if (!ex) saveCfg({mealsCfg: {...c.meals, list: [...c.meals.list, {id, name}]}});
+        if (!ex){ const o = document.createElement("option"); o.value = id; o.textContent = name; sel.querySelector('option[value="__new"]').before(o); }
+        sel.value = id; prev = id; box.remove(); };
+      box.querySelector("[data-nm-add]").onclick = add; box.querySelector("[data-nm-x]").onclick = () => box.remove();
+      inp.onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); add(); } }; }; });
+}
 function macroBar(lbl, got, target, unit){
   const pct = target ? Math.min(100, Math.round(got / target * 100)) : 0, over = target && got > target;
   return `<div class="mrow"><div class="mhead"><span>${lbl}</span><span><b>${r0(got)}</b>${target ? ` / ${r0(target)}` : ""} ${unit}${over ? " · over" : ""}</span></div><div class="gbar" style="--cc:var(--ink)"><i style="width:${pct}%"></i></div></div>`;
@@ -1522,8 +1537,8 @@ function viewFoodApp(){
     ${r ? `<div class="gbar big-bar" style="--cc:var(--ink)"><i style="width:${Math.min(100, Math.round(tot.kcal / r.target * 100))}%"></i></div>` : `<div class="statline">Set your targets in the Targets menu to see what's left.</div>`}
     <div style="margin-top:12px;display:grid;gap:10px">${macroBar("Protein", tot.p, r && r.proG, "g")}${macroBar("Carbs", tot.c, r && r.carbG, "g")}${macroBar("Fat", tot.f, r && r.fatG, "g")}</div>
   </div>
-  ${foodMeals().map(m => { const list = es.filter(e => (e.meal || "other") === m.id); const st = sumEats(list);
-    return `<h2>${esc(m.name)}<span class="sp"></span>${list.length ? `<span class="sub" style="font-family:var(--sans);text-transform:none;letter-spacing:0">${r0(st.kcal)} cal</span>` : ""}<button class="link" data-food-add="${esc(m.id)}">+ Add</button></h2>
+  ${[...foodMeals(), {id: "", name: foodMeals().length ? "No meal" : "Logged"}].filter(m => m.id || !foodMeals().length || es.some(e => !hasMeal(e.meal))).map(m => { const list = es.filter(e => m.id ? e.meal === m.id : !hasMeal(e.meal)); const st = sumEats(list);
+    return `<h2>${esc(m.name)}<span class="sp"></span>${list.length ? `<span class="sub" style="font-family:var(--sans);text-transform:none;letter-spacing:0">${r0(st.kcal)} cal</span>` : ""}<button class="link" data-food-add="${esc(m.id || "none")}">+ Add</button></h2>
     ${list.length ? `<div class="card">${list.map(e => `<div class="row"><div class="grow tap" data-food-edit="${esc(e.id)}"><div class="t">${esc(e.name)}${(+e.qty || 1) !== 1 ? ` <span class="sub">× ${e.qty}</span>` : ""}${e.repeatId ? ` <span class="sub">↻</span>` : ""}</div><div class="m">${r0(e.kcal * (e.qty || 1))} cal · P ${r0(e.p * (e.qty || 1))} · C ${r0(e.c * (e.qty || 1))} · F ${r0(e.f * (e.qty || 1))}</div></div><button class="ghost" data-food-del="${esc(e.id)}" aria-label="Remove">✕</button></div>`).join("")}</div>` : ""}`; }).join("")}`;
 }
 function foodEntrySheet(meal, editId){
@@ -1535,7 +1550,7 @@ function foodEntrySheet(meal, editId){
     ${!cur && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(x => `<button type="button" class="chip" data-pick="${x.id}">${esc(x.name)}</button>`).join("")}</div></div>` : ""}
     <label class="fld"><span>Food</span><input name="name" value="${esc(e.name)}" required></label>
     <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.1" step="any" inputmode="decimal" value="${e.qty || 1}"></label>
-      <label class="fld"><span>Meal</span><select name="meal">${foodMeals().map(m => `<option value="${esc(m.id)}" ${(e.meal||"other")===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></label></div>
+      <label class="fld"><span>Meal</span>${mealSelect(e.meal)}</label></div>
     <div class="sub" style="margin:-2px 0 8px" id="fs-serv">Per serving</div>
     <div class="two"><label class="fld"><span>Calories</span><input name="kcal" type="number" min="0" step="any" inputmode="decimal" value="${e.kcal}" required></label>
       <label class="fld"><span>Protein (g)</span><input name="p" type="number" min="0" step="any" inputmode="decimal" value="${e.p}"></label></div>
@@ -1557,7 +1572,7 @@ function foodEntrySheet(meal, editId){
     },
     cur ? () => { const dd = dayDoc(d); setDay(d, {eats: (dd.eats || []).filter(x => x.id !== editId)}); } : null);
   const S = $(".sheet");
-  wireFoodSearch(S);
+  wireFoodSearch(S); wireMealSelect(S);
   S.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const x = items[b.dataset.pick]; if (!x) return;
     S.querySelector("[name=name]").value = x.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = x[k] ?? "");
     S.querySelectorAll("[data-pick]").forEach(y => y.classList.toggle("on", y === b)); });
@@ -1768,7 +1783,7 @@ function viewSettings(){
   <div class="sub" style="margin:-4px 0 10px">Sections in the food log and for your repeat foods.</div>
   <div class="card">
     ${c.meals.list.map((m, i) => `<div class="row"><input class="inl" data-meal-name="${esc(m.id)}" value="${esc(m.name)}" aria-label="Meal name"><button type="button" class="ghost" data-meal-up="${esc(m.id)}" ${i===0?"disabled":""} aria-label="Move up">↑</button><button type="button" class="ghost" data-meal-del="${esc(m.id)}" aria-label="Remove">✕</button></div>`).join("")}
-    <form class="row" data-form="newmeal"><input class="inl" id="new-meal" placeholder="Add a meal…" autocomplete="off"><button class="btn sm">Add</button></form>
+    <form class="row" data-form="newmeal"><input class="inl" id="new-meal" placeholder="New meal" autocomplete="off"><button class="btn sm">Add</button></form>
   </div>
 
   <h2>Sleep</h2>
@@ -2018,7 +2033,7 @@ document.addEventListener("click", e => {
   if (d.repeat){ repeatSheet(d.repeat); return; }
   if (d.foodtab){ foodTab = d.foodtab; window.scrollTo(0,0); render(); return; }
   if (d.foodday !== undefined){ const n = +d.foodday; foodDay = n === 0 ? null : addDays(foodDay || today(), n); if (foodDay && foodDay >= today()) foodDay = null; render(); return; }
-  if (d.foodAdd){ foodEntrySheet(d.foodAdd); return; }
+  if (d.foodAdd){ foodEntrySheet(d.foodAdd === "none" ? "" : d.foodAdd); return; }
   if (d.foodEdit){ foodEntrySheet(null, d.foodEdit); return; }
   if (d.foodDel){ const dd = dayDoc(foodDay || today()); setDay(foodDay || today(), {eats: (dd.eats || []).filter(x => x.id !== d.foodDel)}); return; }
   if (d.foodItem){ foodItemSheet(d.foodItem); return; }
@@ -2034,7 +2049,7 @@ document.addEventListener("click", e => {
     if (k === "water") saveCfg({water: {...rawWater(), on}}); else if (k === "wauto") saveCfg({water: {...rawWater(), auto: on, ...(on ? {unit: "oz", step: rawWater().step && rawWater().unit === "oz" ? rawWater().step : 8} : {goal: cfg().water.goal})}}); else if (k === "meals") saveCfg({mealsCfg: {...c.meals, on}}); else if (k === "sleep") saveCfg({sleepCfg: {...c.sleep, on}});
     else if (k === "journal") saveCfg({journalOn: on}); else if (k === "goals") saveCfg({goalsOn: on}); else if (k === "agenda") saveCfg({agendaOn: on}); return; }
   if (d.mealUp){ const c = cfg(); moveUp([...c.meals.list], d.mealUp, l => saveCfg({mealsCfg: {...c.meals, list: l}})); return; }
-  if (d.mealDel){ const c = cfg(); if (c.meals.list.length <= 1){ toast("Keep at least one, or switch Meals off."); return; } saveCfg({mealsCfg: {...c.meals, list: c.meals.list.filter(m => m.id !== d.mealDel)}}); return; }
+  if (d.mealDel){ const c = cfg(); saveCfg({mealsCfg: {...c.meals, list: c.meals.list.filter(m => m.id !== d.mealDel)}}); return; }
   if (d.habUp){ const l = habitsList(); const i = l.findIndex(h => h.id === d.habUp); if (i < 1) return; l.splice(i-1, 0, l.splice(i,1)[0]); l.forEach((h, j) => { if (h.order !== j) put(h.id, {...items[h.id], order:j}, {silent:true}); }); render(); return; }
   if (d.habDel){ put(d.habDel, {...items[d.habDel], archived:true}); return; }
   if (d.waterset){ const c = cfg().water, cur = waterAmt(dayDoc(viewDay)) || 0, v = r1(Number(d.waterset) * c.step); setWater(viewDay, Math.abs(cur - v) < 1e-6 ? r1(v - c.step) : v); return; }
