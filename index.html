@@ -375,6 +375,16 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .mrow .mhead{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted)}
 .mrow .mhead b{color:var(--ink);font-weight:600}
 .mrow .gbar{margin-top:5px}
+
+.fsout{display:grid;gap:6px;margin-top:8px;max-height:46vh;overflow:auto}
+.fsr{display:flex;flex-direction:column;gap:2px;text-align:left;padding:9px 12px;border:1px solid var(--field-border);border-radius:10px;background:var(--field-bg);color:var(--ink)}
+.fsr .t{font-size:14px}
+.fsr .m{font-size:11.5px;color:var(--muted)}
+.scanov{position:fixed;inset:0;z-index:60;background:#000;display:flex;align-items:center;justify-content:center}
+.scanov video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.scanbox{position:relative;width:72vw;max-width:340px;height:28vw;max-height:140px;border:3px solid #fff;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+.scanov [data-x]{position:absolute;bottom:calc(30px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%)}
+.scantip{position:absolute;top:calc(30px + env(safe-area-inset-top));left:0;right:0;text-align:center;color:#fff;font-size:14px}
 </style>
 </head>
 <body>
@@ -1262,6 +1272,92 @@ function viewFood(){
   </ul></div>`;
 }
 
+/* ---------- food database search (Open Food Facts + USDA FoodData Central) ---------- */
+const FDC_NUT = {kcal: ["208", "957", "958"], p: ["203"], c: ["205"], f: ["204"]};
+const rnd1 = v => v == null || isNaN(v) ? "" : Math.round(v * 10) / 10;
+async function searchOFF(q){
+  const u = "https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&json=1&page_size=15&fields=code,product_name,brands,serving_size,serving_quantity,nutriments&search_terms=" + encodeURIComponent(q);
+  let r; try { r = await fetch(u); } catch { await new Promise(z => setTimeout(z, 600)); r = await fetch(u); }
+  if (!r.ok) throw new Error("off " + r.status);
+  const j = await r.json();
+  return (j.products || []).map(offToFood).filter(Boolean);
+}
+function offToFood(p){
+  const n = p.nutriments || {}, name = (p.product_name || "").trim(); if (!name) return null;
+  const sq = +p.serving_quantity, hasServ = n["energy-kcal_serving"] != null || (sq > 0 && n["energy-kcal_100g"] != null);
+  const per = k => hasServ ? (n[k + "_serving"] != null ? +n[k + "_serving"] : (n[k + "_100g"] != null ? +n[k + "_100g"] * sq / 100 : null)) : (n[k + "_100g"] != null ? +n[k + "_100g"] : null);
+  const kcal = per("energy-kcal"); if (kcal == null) return null;
+  return {src: "Open Food Facts", name: name + (p.brands ? " · " + p.brands.split(",")[0].trim() : ""), serving: hasServ ? (p.serving_size || sq + " g") : "100 g",
+    kcal: rnd1(kcal), p: rnd1(per("proteins")), c: rnd1(per("carbohydrates")), f: rnd1(per("fat"))};
+}
+async function searchFDC(q){
+  const key = (items.settings || {}).fdcKey || "DEMO_KEY";
+  const u = "https://api.nal.usda.gov/fdc/v1/foods/search?pageSize=15&dataType=Foundation,SR%20Legacy,Survey%20(FNDDS)&api_key=" + encodeURIComponent(key) + "&query=" + encodeURIComponent(q);
+  const r = await fetch(u); if (r.status === 429) throw new Error("fdc-limit"); if (!r.ok) throw new Error("fdc " + r.status);
+  const j = await r.json();
+  return (j.foods || []).map(f => {
+    const get = ids => { const x = (f.foodNutrients || []).find(n => ids.includes(String(n.nutrientNumber))); return x ? +x.value : null; };
+    let kcal = get(FDC_NUT.kcal); if (kcal == null) return null;
+    let p = get(FDC_NUT.p), c = get(FDC_NUT.c), ft = get(FDC_NUT.f), serving = "100 g";
+    if (f.dataType === "Branded" && f.servingSize && /^g|ml$/i.test(f.servingSizeUnit || "")){ const k = f.servingSize / 100; kcal *= k; p = p == null ? null : p * k; c = c == null ? null : c * k; ft = ft == null ? null : ft * k; serving = Math.round(f.servingSize) + " " + (f.servingSizeUnit || "g").toLowerCase(); }
+    const title = (f.description || "").toLowerCase().replace(/(^|[\s,(])\S/g, s => s.toUpperCase());
+    return {src: "USDA", name: title + (f.brandName || f.brandOwner ? " · " + (f.brandName || f.brandOwner) : ""), serving, kcal: rnd1(kcal), p: rnd1(p), c: rnd1(c), f: rnd1(ft)};
+  }).filter(Boolean);
+}
+async function lookupBarcode(code){
+  const r = await fetch("https://world.openfoodfacts.org/api/v2/product/" + encodeURIComponent(code) + ".json?fields=code,product_name,brands,serving_size,serving_quantity,nutriments");
+  if (!r.ok) return null; const j = await r.json(); return j.status === 1 ? offToFood(j.product) : null;
+}
+async function foodSearch(q){
+  const res = await Promise.allSettled([searchFDC(q), searchOFF(q)]);
+  const out = [], errs = [];
+  res.forEach(x => x.status === "fulfilled" ? out.push(...x.value) : errs.push(String(x.reason && x.reason.message || x.reason)));
+  // generic USDA foods first, then branded, keep it short
+  return {list: out.slice(0, 30), errs};
+}
+function wireFoodSearch(S){
+  const box = S.querySelector("#fs-q"), btn = S.querySelector("[data-fs-go]"), out = S.querySelector("#fs-out"), scan = S.querySelector("[data-fs-scan]");
+  if (!box) return;
+  let found = [];
+  const fill = x => { S.querySelector("[name=name]").value = x.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = x[k] === "" ? "" : x[k]);
+    const sv = S.querySelector("#fs-serv"); if (sv) sv.textContent = "Per serving: " + x.serving + " · from " + x.src; out.innerHTML = ""; S.querySelector("[name=qty]").focus(); };
+  const show = (list, msg) => { found = list;
+    out.innerHTML = msg ? `<div class="sub" style="padding:8px 2px">${esc(msg)}</div>` : list.map((x, i) => `<button type="button" class="fsr" data-fs-pick="${i}"><span class="t">${esc(x.name)}</span><span class="m">${x.kcal} cal · P ${x.p} · C ${x.c} · F ${x.f} · per ${esc(x.serving)} · ${x.src}</span></button>`).join("");
+    out.querySelectorAll("[data-fs-pick]").forEach(b => b.onclick = () => fill(found[+b.dataset.fsPick])); };
+  const go = async () => {
+    const q = box.value.trim(); if (!q) return;
+    show([], "Searching…");
+    try {
+      const {list, errs} = await foodSearch(q);
+      if (list.length) show(list);
+      else if (errs.length === 2) show([], errs.some(e => e.includes("fdc-limit")) ? "The free search limit is used up for now. Try again in an hour, or add your own free key in Settings → Food search." : "Food search needs the installed app and an internet connection.");
+      else show([], "No matches. Try fewer or simpler words.");
+    } catch { show([], "Food search needs the installed app and an internet connection."); }
+  };
+  btn.onclick = go; box.onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); go(); } };
+  if (scan) scan.onclick = () => scanBarcode(async code => {
+    show([], "Looking up " + code + "…");
+    try { const x = await lookupBarcode(code); if (x) fill(x); else show([], "That barcode isn't in Open Food Facts yet. Enter it by hand."); }
+    catch { show([], "Couldn't look that up. Check your connection."); }
+  });
+}
+async function scanBarcode(onCode){
+  if (!("BarcodeDetector" in window) || !navigator.mediaDevices){ toast("Barcode scanning isn't supported here."); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}}); }
+  catch { toast("Camera access was blocked."); return; }
+  const ov = document.createElement("div"); ov.className = "scanov";
+  ov.innerHTML = `<video playsinline muted></video><div class="scanbox"></div><button class="btn" data-x>Cancel</button><div class="scantip">Point at the barcode</div>`;
+  document.body.appendChild(ov);
+  const v = ov.querySelector("video"); v.srcObject = stream; await v.play().catch(() => {});
+  const det = new BarcodeDetector({formats: ["ean_13", "ean_8", "upc_a", "upc_e"]});
+  let live = true;
+  const stop = () => { live = false; stream.getTracks().forEach(t => t.stop()); ov.remove(); };
+  ov.querySelector("[data-x]").onclick = stop;
+  const tick = async () => { if (!live) return; try { const r = await det.detect(v); if (r.length){ const code = r[0].rawValue; stop(); onCode(code); return; } } catch {} setTimeout(tick, 250); };
+  tick();
+}
+
 /* ---------- Food tracker ---------- */
 let foodTab = "log", foodDay = null;
 const eatsOf = d => ((items["day-" + d] || {}).eats || []);
@@ -1301,11 +1397,12 @@ function foodEntrySheet(meal, editId){
   const e = cur || {name: "", qty: 1, kcal: "", p: "", c: "", f: "", meal};
   const recent = myFoods().slice(0, 12);
   sheet(cur ? "Edit food" : "Add food", `
+    ${cur ? "" : `<div class="fld"><span>Search foods</span><div class="quick" style="margin-top:0"><input id="fs-q" placeholder="Search" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-fs-go>Search</button>${"BarcodeDetector" in window ? `<button type="button" class="btn" data-fs-scan aria-label="Scan barcode">Scan</button>` : ""}</div><div id="fs-out" class="fsout"></div></div>`}
     ${!cur && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(x => `<button type="button" class="chip" data-pick="${x.id}">${esc(x.name)}</button>`).join("")}</div></div>` : ""}
     <label class="fld"><span>Food</span><input name="name" value="${esc(e.name)}" required></label>
     <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.1" step="any" inputmode="decimal" value="${e.qty || 1}"></label>
       <label class="fld"><span>Meal</span><select name="meal">${foodMeals().map(m => `<option value="${esc(m.id)}" ${(e.meal||"other")===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></label></div>
-    <div class="sub" style="margin:-2px 0 8px">Per serving</div>
+    <div class="sub" style="margin:-2px 0 8px" id="fs-serv">Per serving</div>
     <div class="two"><label class="fld"><span>Calories</span><input name="kcal" type="number" min="0" step="any" inputmode="decimal" value="${e.kcal}" required></label>
       <label class="fld"><span>Protein (g)</span><input name="p" type="number" min="0" step="any" inputmode="decimal" value="${e.p}"></label></div>
     <div class="two"><label class="fld"><span>Carbs (g)</span><input name="c" type="number" min="0" step="any" inputmode="decimal" value="${e.c}"></label>
@@ -1326,6 +1423,7 @@ function foodEntrySheet(meal, editId){
     },
     cur ? () => { const dd = dayDoc(d); setDay(d, {eats: (dd.eats || []).filter(x => x.id !== editId)}); } : null);
   const S = $(".sheet");
+  wireFoodSearch(S);
   S.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const x = items[b.dataset.pick]; if (!x) return;
     S.querySelector("[name=name]").value = x.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = x[k] ?? "");
     S.querySelectorAll("[data-pick]").forEach(y => y.classList.toggle("on", y === b)); });
@@ -1551,6 +1649,13 @@ function viewSettings(){
     <form class="row" data-form="newhab"><input class="inl" id="new-hab" placeholder="Add a habit…" autocomplete="off"><button class="btn sm">Add</button></form>
   </div>
 
+  <h2>Food search</h2>
+  <div class="card">
+    <div class="row"><div class="grow"><div class="t">USDA key (optional)</div><div class="m">Search works without one. A free key from api.data.gov raises the hourly limit.</div></div></div>
+    <div class="row"><input class="inl" id="set-fdc" value="${esc((items.settings||{}).fdcKey || "")}" placeholder="Paste key" autocomplete="off" spellcheck="false"></div>
+  </div>
+  <div class="sub" style="margin-top:8px">Searches go to Open Food Facts and the USDA. Only the words you search for or the barcode is sent, nothing else from Base.</div>
+
   <h2>Categories</h2>
   <div class="card">
     ${CATS.map(([k,l]) => `<div class="row"><span class="bar-l" style="--c:${catColors()[k]};height:22px;align-self:center"></span><div class="grow t">${l}</div><select class="sel" data-cat-color="${k}" aria-label="${l} color">${PAL.map((c, i) => `<option value="${i}" ${PAL[i]===catColors()[k]?"selected":""}>${PALN[i]}</option>`).join("")}</select></div>`).join("")}
@@ -1597,6 +1702,7 @@ document.addEventListener("change", e => {
   if (el.id === "food-in"){ const v = Math.round(num()); if (v >= 0 && v <= 11) saveFood({inch: v}); else render(); return; }
   if (el.id === "food-pro"){ saveFood({proL: Math.round(num() * 10) / 10}); return; }
   if (el.id === "food-bf"){ const v = num(); if (el.value === "" ) saveFood({bf: ""}); else if (v >= 3 && v <= 70) saveFood({bf: Math.round(v * 10) / 10}); else { toast("Body fat 3–70%."); render(); } return; }
+  if (el.id === "set-fdc"){ saveCfg({fdcKey: el.value.trim()}); return; }
   if (el.id === "set-weight"){ const w = num(); if (!(w >= 50 && w <= 700)){ toast("Enter your weight in pounds."); render(); return; }
     const first = !c.water.weight; saveCfg({water: {...rawWater(), weight: r1(w), ...(first ? {auto: true, unit: "oz", step: 8} : {})}}); if (first) toast("Water goal set to " + Math.round(w/2) + " oz a day."); return; }
   if (el.id === "set-water-goal"){ if (num() > 0) saveCfg({water: {...rawWater(), goal: num()}}); else render(); return; }
