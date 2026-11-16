@@ -2194,7 +2194,7 @@ function eventSheet(id, preset = {}){
   if (isSeries && occ && occ !== e.date){ const sp = spanOf(e); date = occ; endDate = sp ? addDays(occ, sp) : ""; }
   const allDay = !!e.allDay || (src && !e.start);
   sheet(id ? "Event" : "New event", `
-    ${isSeries ? `<div class="fld"><span>Apply changes to</span><div class="seg" data-seg="scope"><button type="button" data-val="one" class="on">This event</button><button type="button" data-val="all">All in series</button></div><input type="hidden" name="scope" value="one"></div>` : ""}
+    ${isSeries ? `<div class="fld"><span>Apply changes to</span><div class="seg" data-seg="scope"><button type="button" data-val="all" class="on">All in series</button><button type="button" data-val="one">Only this one</button></div><input type="hidden" name="scope" value="all"></div>` : ""}
     <label class="fld"><span>Title</span><input name="title" value="${esc(e.title)}" required></label>
     <div class="fld"><span>Category & tags</span>${catPicker(catOf(e), extraIds(e))}</div>
     <label class="fld" style="display:flex;align-items:center;gap:12px"><span style="margin:0;flex:1">All day</span><input type="checkbox" class="switch" name="allday" ${allDay?"checked":""}></label>
