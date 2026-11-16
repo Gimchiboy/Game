@@ -410,6 +410,12 @@ details > summary{list-style:none}details > summary::-webkit-details-marker{disp
 .swatches{display:flex;gap:8px;flex-wrap:wrap}.swb{width:30px;height:30px;border-radius:50%;background:var(--sw);border:2px solid transparent;box-shadow:inset 0 0 0 2px var(--lcd)}.swb.on{border-color:var(--ink)}
 .row.tagged{background:color-mix(in srgb, var(--tf) 22%, var(--lcd));border-radius:12px;margin:3px 6px;border-top-color:transparent}
 .row.tagged + .row{border-top-color:transparent}
+.pxtop{display:flex;align-items:center;gap:8px;margin-top:4px}.pxtop .inl{flex:1;min-width:0}
+.pxbar{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.pxbar .chip{padding:6px 10px}
+.pxwrap{position:relative;overflow:hidden;border-radius:14px;border:1px solid var(--line);background:#efece6;height:min(92vw,520px);display:flex;align-items:center;justify-content:center;touch-action:none}
+#px-c{image-rendering:pixelated;touch-action:none;max-width:none;cursor:crosshair}
+.pxpal{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.pxsw{width:34px;height:34px;border-radius:9px;background:var(--sw);border:2px solid var(--line);box-shadow:inset 0 0 0 2px var(--lcd)}.pxsw.on{border-color:var(--ink);transform:scale(1.08)}
+.pxsw.add{display:grid;place-items:center;background:var(--lcd);font-size:18px;cursor:pointer}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
 
@@ -711,7 +717,7 @@ async function init(){
 let prompted = false;
 function maybePromptBackup(){ if (prompted || !backupDue()) return; prompted = true; setTimeout(backupPrompt, 600); }
 
-const ICON = {"today": "<path d=\"M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/>", "apps": "<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/>", "settings": "<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "tasks": "<path d=\"M9 6h11M9 12h11M9 18h11\"/><path d=\"M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2\"/>", "calendar": "<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"15\" rx=\"2.5\"/><path d=\"M3.5 10h17M8 3v4M16 3v4\"/>", "notes": "<path d=\"M6 3.5h9l3.5 3.5v13.5H6z\"/><path d=\"M9 11h6M9 15h6\"/>", "journal": "<path d=\"M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z\"/><path d=\"M5 17a3 3 0 0 1 3-3h11M9 8h6\"/>", "trends": "<path d=\"M4 20V10M10 20V4M16 20v-8M21 20H3\"/>", "pet": "<path d=\"M12 3c-4.4 0-7 3.6-7 8.2C5 16 8 21 12 21s7-5 7-9.8C19 6.6 16.4 3 12 3z\"/><path d=\"M9.5 10.5v1.5M14.5 10.5v1.5M10 15.5h4\"/>", "vault": "<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"16\" rx=\"2.5\"/><path d=\"M9 10l-2.5 2.5L9 15M15 10l2.5 2.5L15 15\"/>"};
+const ICON = {"today": "<path d=\"M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/>", "apps": "<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/>", "settings": "<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "tasks": "<path d=\"M9 6h11M9 12h11M9 18h11\"/><path d=\"M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2\"/>", "calendar": "<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"15\" rx=\"2.5\"/><path d=\"M3.5 10h17M8 3v4M16 3v4\"/>", "notes": "<path d=\"M6 3.5h9l3.5 3.5v13.5H6z\"/><path d=\"M9 11h6M9 15h6\"/>", "journal": "<path d=\"M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z\"/><path d=\"M5 17a3 3 0 0 1 3-3h11M9 8h6\"/>", "trends": "<path d=\"M4 20V10M10 20V4M16 20v-8M21 20H3\"/>", "pixel": "<rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"2\"/><path d=\"M8 8h3v3H8zM13 13h3v3h-3zM13 8h3v3h-3z\"/>", "pet": "<path d=\"M12 3c-4.4 0-7 3.6-7 8.2C5 16 8 21 12 21s7-5 7-9.8C19 6.6 16.4 3 12 3z\"/><path d=\"M9.5 10.5v1.5M14.5 10.5v1.5M10 15.5h4\"/>", "vault": "<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"16\" rx=\"2.5\"/><path d=\"M9 10l-2.5 2.5L9 15M15 10l2.5 2.5L15 15\"/>"};
 Object.assign(ICON, {
   reel:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9h17M7 5l2 4M12 5l2 4M17 5l2 4"/>',
   circulate:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>',
@@ -728,6 +734,7 @@ const APPS = [
   {k:"notes", n:"Notes", stat: () => { const n = all("note").length; return `${n} note${n===1?"":"s"}`; }},
   {k:"journal", n:"Journal", stat: () => { const n = all("journal").filter(j => (j.body||"").trim()).length; return `${n} entr${n===1?"y":"ies"}`; }},
   {k:"trends", n:"Trends", stat: () => "Graphs of your dailies"},
+  {k:"pixel", n:"Pixel", stat: () => { const n = all("pixelart").length; return n ? `${n} drawing${n === 1 ? "" : "s"}` : "Pixel art maker"; }},
   {k:"pet", n:"Pet", stat: () => { const P = pet(); if (!P) return "Get an egg"; if (P.dead) return "Start a new egg"; const c = P.call && (P.call.type !== "lights" || P.lights); return c ? "Needs you" : P.paused ? "Paused" : P.asleep ? "Asleep" : (P.name || PET_FORMS[P.form]); }},
   {k:"reel", n:"Reel", ext: true, stat: () => { const r = reelStats(); return r.filled ? `${r.filled} of 108 beats` : "Storyboard"; }},
   {k:"circulate", n:"Circulate", ext: true, stat: () => items["app-circulate"] ? "Beat saved" : "Beat maker"},
@@ -3550,13 +3557,171 @@ function collectionHtml(){
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-book]"); if (b) bookSheet(b.dataset.book); });
 
+/* ---------- Pixel: a pixel art editor ---------- */
+const PX_PALETTES = {
+  "Crystal pup": ["#10123a", "#f6c07b", "#d2965f", "#fce7c4", "#d7a38c", "#765250", "#3b7ebb", "#203868", "#69d8da", "#d4f1ec", "#3ea2be", "#ffffff", "#f4a0a0", "#e86e7e"],
+  "Basic": ["#1a1c2c", "#5d275d", "#b13e53", "#ef7d57", "#ffcd75", "#a7f070", "#38b764", "#257179", "#29366f", "#3b5dc9", "#41a6f6", "#73eff7", "#f4f4f4", "#94b0c2", "#566c86", "#333c57"],
+  "Soft": ["#2b2230", "#ffd8c2", "#f7a9b8", "#fff1a8", "#c9f0d6", "#c6e3ff", "#ddccff", "#dcb89c", "#8a5a44", "#d4527a", "#4a5a9a", "#4f8a5b", "#ffffff", "#9a8f80"],
+};
+let PX = null;
+function pxNew(w = 48, h = 48, pal = "Crystal pup"){ return {id: null, name: "", w, h, data: new Array(w * h).fill(null), palette: [...PX_PALETTES[pal]], color: PX_PALETTES[pal][0], tool: "pen", size: 1, mirror: false, grid: true, zoom: 0, panX: 0, panY: 0, hist: [], fut: [], ref: null, refOp: .4, refOn: true}; }
+function pxState(){ if (!PX) PX = pxNew(); return PX; }
+const pxSnap = () => { const S = pxState(); S.hist.push(S.data.slice()); if (S.hist.length > 60) S.hist.shift(); S.fut = []; };
+function pxCell(){ const S = pxState(), wrap = document.getElementById("px-wrap"); const avail = wrap ? wrap.clientWidth : 340; if (!S.zoom) S.zoom = Math.max(4, Math.floor(avail / Math.max(S.w, S.h))); return S.zoom; }
+function pxDraw(preview){
+  const S = pxState(), cv = document.getElementById("px-c"); if (!cv) return;
+  const c = pxCell(), W = S.w * c, H = S.h * c; if (cv.width !== W || cv.height !== H){ cv.width = W; cv.height = H; }
+  cv.style.transform = `translate(${S.panX}px, ${S.panY}px)`;
+  const ctx = cv.getContext("2d"); ctx.imageSmoothingEnabled = false;
+  for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++){ ctx.fillStyle = (x + y) % 2 ? "#e9e6df" : "#f7f5f0"; ctx.fillRect(x * c, y * c, c, c); }
+  if (S.ref && S.refOn && S._refImg && S._refImg.complete){ ctx.globalAlpha = S.refOp; ctx.drawImage(S._refImg, 0, 0, W, H); ctx.globalAlpha = 1; }
+  const D = preview || S.data;
+  for (let i = 0; i < D.length; i++) if (D[i]){ ctx.fillStyle = D[i]; ctx.fillRect((i % S.w) * c, Math.floor(i / S.w) * c, c, c); }
+  if (S.grid && c >= 6){ ctx.strokeStyle = "rgba(0,0,0,.08)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = 1; x < S.w; x++){ ctx.moveTo(x * c + .5, 0); ctx.lineTo(x * c + .5, H); } for (let y = 1; y < S.h; y++){ ctx.moveTo(0, y * c + .5); ctx.lineTo(W, y * c + .5); } ctx.stroke();
+    if (S.mirror){ ctx.strokeStyle = "rgba(220,60,90,.5)"; ctx.beginPath(); ctx.moveTo(S.w / 2 * c, 0); ctx.lineTo(S.w / 2 * c, H); ctx.stroke(); } }
+  const pv = document.getElementById("px-prev"); if (pv){ const pc = pv.getContext("2d"); pv.width = S.w; pv.height = S.h; pc.clearRect(0, 0, S.w, S.h); for (let i = 0; i < D.length; i++) if (D[i]){ pc.fillStyle = D[i]; pc.fillRect(i % S.w, Math.floor(i / S.w), 1, 1); } }
+}
+function pxSet(D, x, y, col){ const S = pxState(); const put = (X, Y) => { for (let a = 0; a < S.size; a++) for (let b = 0; b < S.size; b++){ const xx = X + a, yy = Y + b; if (xx >= 0 && yy >= 0 && xx < S.w && yy < S.h) D[yy * S.w + xx] = col; } };
+  put(x, y); if (S.mirror) put(S.w - 1 - x - (S.size - 1), y); }
+function pxLine(D, x0, y0, x1, y1, col){ const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+  for (;;){ pxSet(D, x0, y0, col); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy){ e += dy; x0 += sx; } if (e2 <= dx){ e += dx; y0 += sy; } } }
+function pxRect(D, x0, y0, x1, y1, col){ const [a, b] = [Math.min(x0, x1), Math.max(x0, x1)], [c, d] = [Math.min(y0, y1), Math.max(y0, y1)]; for (let x = a; x <= b; x++){ pxSet(D, x, c, col); pxSet(D, x, d, col); } for (let y = c; y <= d; y++){ pxSet(D, a, y, col); pxSet(D, b, y, col); } }
+function pxEllipse(D, x0, y0, x1, y1, col){ const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rx = Math.abs(x1 - x0) / 2 + .5, ry = Math.abs(y1 - y0) / 2 + .5, S = pxState();
+  for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++){ const inn = v => ((v[0] - cx) / rx) ** 2 + ((v[1] - cy) / ry) ** 2 <= 1;
+    if (inn([x, y]) && (!inn([x + 1, y]) || !inn([x - 1, y]) || !inn([x, y + 1]) || !inn([x, y - 1]))) pxSet(D, x, y, col); } void S; }
+function pxFill(D, x, y, col){ const S = pxState(), t = D[y * S.w + x]; if (t === col) return; const st = [[x, y]];
+  while (st.length){ const [a, b] = st.pop(); if (a < 0 || b < 0 || a >= S.w || b >= S.h || D[b * S.w + a] !== t) continue; D[b * S.w + a] = col; st.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]); } }
+function pxOutline(){ const S = pxState(); pxSnap(); const D = S.data.slice();
+  for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++){ if (S.data[y * S.w + x]) continue; const f = (X, Y) => X >= 0 && Y >= 0 && X < S.w && Y < S.h && S.data[Y * S.w + X];
+    if (f(x + 1, y) || f(x - 1, y) || f(x, y + 1) || f(x, y - 1)) D[y * S.w + x] = S.color; }
+  S.data = D; pxDraw(); }
+function pxShade(){ const S = pxState(), col = S.color, dark = shadeC(col); pxSnap(); const D = S.data.slice();
+  for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++){ if (S.data[y * S.w + x] !== col) continue; const n = (X, Y) => X < 0 || Y < 0 || X >= S.w || Y >= S.h ? null : S.data[Y * S.w + X];
+    if (n(x + 1, y) !== col || n(x, y + 1) !== col || n(x + 1, y + 1) !== col) D[y * S.w + x] = dark; }
+  S.data = D; if (!S.palette.includes(dark)) S.palette.push(dark); pxRender(); }
+function pxResize(w, h){ const S = pxState(), D = new Array(w * h).fill(null), ox = Math.floor((w - S.w) / 2), oy = Math.floor((h - S.h) / 2);
+  for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++){ const X = x + ox, Y = y + oy; if (X >= 0 && Y >= 0 && X < w && Y < h) D[Y * w + X] = S.data[y * S.w + x]; }
+  pxSnap(); S.w = w; S.h = h; S.data = D; S.hist = []; S.zoom = 0; S.panX = S.panY = 0; pxRender(); }
+function pxPNG(scale = 1){ const S = pxState(), cv = document.createElement("canvas"); cv.width = S.w * scale; cv.height = S.h * scale; const c = cv.getContext("2d");
+  S.data.forEach((v, i) => { if (v){ c.fillStyle = v; c.fillRect((i % S.w) * scale, Math.floor(i / S.w) * scale, scale, scale); } }); return cv.toDataURL("image/png"); }
+function pxThumb(it){ const cv = document.createElement("canvas"); cv.width = it.w; cv.height = it.h; const c = cv.getContext("2d"); (it.px || []).forEach((v, i) => { if (v){ c.fillStyle = v; c.fillRect(i % it.w, Math.floor(i / it.w), 1, 1); } }); return cv.toDataURL(); }
+function pxSave(asNew){ const S = pxState(); const name = (document.getElementById("px-name") || {}).value || S.name || "Untitled"; S.name = name.trim() || "Untitled";
+  if (!S.id || asNew) S.id = uid(); put(S.id, {kind: "pixelart", name: S.name, w: S.w, h: S.h, px: S.data, palette: S.palette, updated: Date.now()}); toast("Saved."); }
+function pxOpen(id){ const it = items[id]; if (!it) return; PX = {...pxNew(it.w, it.h), id, name: it.name, data: (it.px || []).slice(), palette: (it.palette || PX_PALETTES["Crystal pup"]).slice()}; PX.color = PX.palette[0]; pxView = "edit"; render(); }
+/* convert an image (AI pixel art etc.) to real pixels */
+function pxConvert(img, target, ncol, dropBg){
+  const cw = img.naturalWidth, ch = img.naturalHeight, cv = document.createElement("canvas"); cv.width = cw; cv.height = ch; const c = cv.getContext("2d"); c.drawImage(img, 0, 0);
+  const A = c.getImageData(0, 0, cw, ch).data, bgc = [A[0], A[1], A[2]], isBg = i => dropBg && Math.abs(A[i] - bgc[0]) + Math.abs(A[i + 1] - bgc[1]) + Math.abs(A[i + 2] - bgc[2]) < 40 || A[i + 3] < 80;
+  const samp = []; for (let k = 0; k < 6000; k++){ const i = (Math.floor(Math.random() * cw * ch)) * 4; if (!isBg(i)) samp.push([A[i], A[i + 1], A[i + 2]]); }
+  let C = samp.slice(0, ncol).map(v => v.slice()); if (!C.length) return null; while (C.length < ncol) C.push(samp[Math.floor(Math.random() * samp.length)].slice());
+  for (let it = 0; it < 14; it++){ const sum = C.map(() => [0, 0, 0, 0]); samp.forEach(p => { let b = 0, bd = 1e9; C.forEach((q, j) => { const d = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2; if (d < bd){ bd = d; b = j; } }); sum[b][0] += p[0]; sum[b][1] += p[1]; sum[b][2] += p[2]; sum[b][3]++; });
+    C = C.map((q, j) => sum[j][3] ? [sum[j][0] / sum[j][3], sum[j][1] / sum[j][3], sum[j][2] / sum[j][3]] : q); }
+  const hex = C.map(q => rgbHex(q)), cell = cw / target, th = Math.max(1, Math.round(ch / cell)), out = new Array(target * th).fill(null);
+  const near = (r, g, b) => { let k = 0, bd = 1e9; C.forEach((q, j) => { const d = (r - q[0]) ** 2 + (g - q[1]) ** 2 + (b - q[2]) ** 2; if (d < bd){ bd = d; k = j; } }); return k; };
+  for (let y = 0; y < th; y++) for (let x = 0; x < target; x++){ const votes = {}; let bgv = 0, tot = 0;
+    for (let sy = .25; sy < .8; sy += .17) for (let sx = .25; sx < .8; sx += .17){ const px = Math.min(cw - 1, Math.floor((x + sx) * cell)), py = Math.min(ch - 1, Math.floor((y + sy) * cell)), i = (py * cw + px) * 4; tot++;
+      if (isBg(i)){ bgv++; continue; } const k = near(A[i], A[i + 1], A[i + 2]); votes[k] = (votes[k] || 0) + 1; }
+    if (bgv * 2 >= tot) continue; const best = Object.entries(votes).sort((a, b) => b[1] - a[1])[0]; if (best) out[y * target + x] = hex[+best[0]]; }
+  return {w: target, h: th, data: out, palette: [...new Set(hex)]};
+}
+let pxView = "list";
+function viewPixel(){
+  const all_ = all("pixelart").sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  if (pxView === "list") return `<div class="kicker">Pixel art</div><h1>Pixel</h1>
+    <div class="chips" style="margin-top:12px"><button class="btn pri" data-px="new">New canvas</button><label class="btn" style="cursor:pointer">Import image<input type="file" accept="image/*" id="px-import" hidden></label></div>
+    <div class="sub" style="margin-top:8px">Import turns any picture, including AI "pixel art", into real pixels you can edit.</div>
+    ${all_.length ? `<div class="pgrid" style="margin-top:16px">${all_.map(it => `<button class="pcell" data-px-open="${it.id}"><img src="${pxThumb(it)}" alt="" style="width:72px;height:72px;image-rendering:pixelated;object-fit:contain"><span>${esc(it.name)}</span><small>${it.w}×${it.h}</small></button>`).join("")}</div>` : `<div class="card" style="margin-top:16px"><div class="empty">No drawings yet.</div></div>`}`;
+  const S = pxState(), T = [["pen", "Pen"], ["erase", "Erase"], ["fill", "Fill"], ["pick", "Pick"], ["line", "Line"], ["rect", "Box"], ["ellipse", "Circle"], ["move", "Move"]];
+  return `<div class="pxtop"><button class="link" data-px="back">‹ Drawings</button><input class="inl" id="px-name" value="${esc(S.name)}" placeholder="Name" autocomplete="off"><button class="btn sm pri" data-px="save">Save</button></div>
+  <div class="pxbar">${T.map(([k, l]) => `<button class="chip ${S.tool === k ? "on" : ""}" data-px-tool="${k}">${l}</button>`).join("")}</div>
+  <div id="px-wrap" class="pxwrap"><canvas id="px-c"></canvas></div>
+  <div class="pxbar"><button class="btn sm" data-px="undo">Undo</button><button class="btn sm" data-px="redo">Redo</button><button class="btn sm" data-px="zin">＋</button><button class="btn sm" data-px="zout">－</button><button class="chip ${S.mirror ? "on" : ""}" data-px="mirror">Mirror</button><button class="chip ${S.grid ? "on" : ""}" data-px="grid">Grid</button><button class="chip ${S.size > 1 ? "on" : ""}" data-px="size">${S.size}px</button></div>
+  <div class="pxpal">${S.palette.map(c => `<button class="pxsw ${c === S.color ? "on" : ""}" data-px-col="${c}" style="--sw:${c}" aria-label="${c}"></button>`).join("")}<label class="pxsw add" aria-label="Add color">+<input type="color" id="px-add" value="${S.color}" hidden></label></div>
+  <div class="pxbar"><button class="btn sm" data-px="outline">Outline</button><button class="btn sm" data-px="shade">Shade</button><select class="sel" id="px-pal" aria-label="Palette"><option value="">Palette…</option>${Object.keys(PX_PALETTES).map(k => `<option>${k}</option>`).join("")}</select></div>
+  <div class="sub" style="margin:4px 0 10px">Outline draws the current color around your shape. Shade darkens the lower-right edge of the current color.</div>
+  <h2>Reference</h2>
+  <div class="card"><div class="row"><div class="grow"><div class="t">Trace over an image</div><div class="m">Shown behind your pixels, never saved into them</div></div><label class="btn sm" style="cursor:pointer">${S.ref ? "Change" : "Add"}<input type="file" accept="image/*" id="px-ref" hidden></label></div>
+    ${S.ref ? `<label class="row"><div class="grow t">Show it</div><input type="checkbox" class="switch" id="px-refon" ${S.refOn ? "checked" : ""}></label><div class="row"><div class="grow t">Opacity</div><input type="range" id="px-refop" min="5" max="100" value="${Math.round(S.refOp * 100)}" style="width:50%"></div>` : ""}</div>
+  <h2>Canvas</h2>
+  <div class="card"><div class="row"><div class="grow t">Size</div><select class="sel" id="px-size">${[16, 24, 32, 48, 64, 96, 128].map(n => `<option value="${n}" ${n === S.w ? "selected" : ""}>${n}×${n}</option>`).join("")}</select></div>
+    <div class="row"><div class="grow"><div class="t">Preview</div><div class="m">Actual size</div></div><canvas id="px-prev" style="image-rendering:pixelated;width:${S.w}px;height:${S.h}px;background:repeating-conic-gradient(#e9e6df 0 25%, #f7f5f0 0 50%) 0 0/8px 8px"></canvas></div>
+    <div class="row"><div class="grow t">Export PNG</div><button class="btn sm" data-px="png1">1×</button><button class="btn sm" data-px="png8">8×</button></div>
+    ${S.id ? `<div class="row"><div class="grow t">Copy</div><button class="btn sm" data-px="dup">Save as new</button><button class="btn sm danger" data-px="del">Delete</button></div>` : ""}</div>`;
+}
+function pxRender(){ if (tab === "apps" && app === "pixel") render(); }
+function pxDownload(url, name){ const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+function pxImportFile(file, asRef){ const fr = new FileReader(); fr.onload = () => { const img = new Image(); img.onload = () => {
+    if (asRef){ const S = pxState(); S.ref = fr.result; S._refImg = img; S.refOn = true; pxRender(); return; }
+    sheet("Import as pixels", `<div class="sub" style="margin-bottom:10px">Picks a grid and a small set of colors from your picture. AI "pixel art" works well; aim the width at how many fake pixels wide it looks.</div>
+      <label class="fld"><span>Width in pixels</span><input name="w" inputmode="numeric" value="64"></label>
+      <label class="fld"><span>Colors</span><input name="n" inputmode="numeric" value="14"></label>
+      <label class="fld" style="display:flex;align-items:center;gap:12px"><span style="margin:0;flex:1">Remove the background</span><input type="checkbox" class="switch" name="bg" checked></label>`,
+      f => { const w = Math.max(8, Math.min(160, parseInt(f.w.value) || 64)), n = Math.max(2, Math.min(32, parseInt(f.n.value) || 14)), r = pxConvert(img, w, n, f.bg.checked); if (!r) return "Couldn't read that image.";
+        PX = {...pxNew(r.w, r.h), data: r.data, palette: r.palette, name: file.name.replace(/\.[^.]+$/, "")}; PX.color = r.palette[0]; PX.ref = fr.result; PX._refImg = img; PX.refOn = false; pxView = "edit"; render(); }, null, "Convert");
+  }; img.src = fr.result; }; fr.readAsDataURL(file); }
+function mountPixel(){
+  const nm = document.getElementById("px-name"); if (nm) nm.oninput = () => { pxState().name = nm.value; };
+  const imp = document.getElementById("px-import"); if (imp) imp.onchange = () => imp.files[0] && pxImportFile(imp.files[0], false);
+  const cv = document.getElementById("px-c"); if (!cv) return;
+  const S = pxState(); pxDraw();
+  const ref = document.getElementById("px-ref"); if (ref) ref.onchange = () => ref.files[0] && pxImportFile(ref.files[0], true);
+  const ro = document.getElementById("px-refon"); if (ro) ro.onchange = () => { S.refOn = ro.checked; pxDraw(); };
+  const rop = document.getElementById("px-refop"); if (rop) rop.oninput = () => { S.refOp = rop.value / 100; pxDraw(); };
+  const sz = document.getElementById("px-size"); if (sz) sz.onchange = () => pxResize(+sz.value, +sz.value);
+  const add = document.getElementById("px-add"); if (add) add.onchange = () => { if (!S.palette.includes(add.value)) S.palette.push(add.value); S.color = add.value; pxRender(); };
+  const pal = document.getElementById("px-pal"); if (pal) pal.onchange = () => { if (!pal.value) return; S.palette = [...PX_PALETTES[pal.value]]; S.color = S.palette[0]; pxRender(); };
+  const ptrs = new Map(); let start = null, before = null, last = null, pinch = null;
+  const cellAt = e => { const r = cv.getBoundingClientRect(), c = pxCell(); return [Math.floor((e.clientX - r.left) / c), Math.floor((e.clientY - r.top) / c)]; };
+  cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 2){ const [a, b] = [...ptrs.values()]; pinch = {d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: S.zoom, mx: (a[0] + b[0]) / 2, my: (a[1] + b[1]) / 2, px: S.panX, py: S.panY}; if (before){ S.data = before; S.hist.pop(); before = null; } start = null; pxDraw(); return; }
+    const [x, y] = cellAt(e); start = [x, y]; last = [x, y];
+    if (S.tool === "move"){ start = [e.clientX, e.clientY, S.panX, S.panY]; return; }
+    if (S.tool === "pick"){ const v = S.data[y * S.w + x]; if (v){ S.color = v; if (!S.palette.includes(v)) S.palette.push(v); pxRender(); } return; }
+    pxSnap(); before = S.data.slice();
+    if (S.tool === "fill"){ if (x >= 0 && y >= 0 && x < S.w && y < S.h) pxFill(S.data, x, y, S.color); before = null; pxDraw(); return; }
+    if (S.tool === "pen" || S.tool === "erase"){ pxSet(S.data, x, y, S.tool === "erase" ? null : S.color); pxDraw(); } };
+  cv.onpointermove = e => { if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pinch && ptrs.size === 2){ const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); S.zoom = Math.max(2, Math.min(48, Math.round(pinch.z * d / pinch.d))); S.panX = pinch.px + (a[0] + b[0]) / 2 - pinch.mx; S.panY = pinch.py + (a[1] + b[1]) / 2 - pinch.my; pxDraw(); return; }
+    if (!start) return;
+    if (S.tool === "move"){ S.panX = start[2] + e.clientX - start[0]; S.panY = start[3] + e.clientY - start[1]; pxDraw(); return; }
+    const [x, y] = cellAt(e);
+    if (S.tool === "pen" || S.tool === "erase"){ pxLine(S.data, last[0], last[1], x, y, S.tool === "erase" ? null : S.color); last = [x, y]; pxDraw(); return; }
+    if (["line", "rect", "ellipse"].includes(S.tool)){ const D = before.slice(); ({line: pxLine, rect: pxRect, ellipse: pxEllipse})[S.tool](D, start[0], start[1], x, y, S.color); S.data = D; pxDraw(); } };
+  const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size){ start = null; before = null; } };
+  cv.onpointerup = up; cv.onpointercancel = up;
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-px],[data-px-tool],[data-px-col],[data-px-open]"); if (!t) return; const S = pxState();
+  if (t.dataset.pxOpen) return pxOpen(t.dataset.pxOpen);
+  if (t.dataset.pxTool){ S.tool = t.dataset.pxTool; return pxRender(); }
+  if (t.dataset.pxCol){ S.color = t.dataset.pxCol; if (S.tool === "erase" || S.tool === "pick") S.tool = "pen"; return pxRender(); }
+  const a = t.dataset.px;
+  if (a === "new"){ PX = pxNew(); pxView = "edit"; return render(); }
+  if (a === "back"){ pxView = "list"; return render(); }
+  if (a === "save") return pxSave(false);
+  if (a === "dup") return pxSave(true);
+  if (a === "del") return confirmSheet("Delete this drawing?", "This can't be undone.", () => { del(S.id); PX = null; pxView = "list"; render(); });
+  if (a === "undo"){ if (S.hist.length){ S.fut.push(S.data); S.data = S.hist.pop(); pxDraw(); } return; }
+  if (a === "redo"){ if (S.fut.length){ S.hist.push(S.data); S.data = S.fut.pop(); pxDraw(); } return; }
+  if (a === "zin"){ S.zoom = Math.min(48, pxCell() + 2); return pxDraw(); }
+  if (a === "zout"){ S.zoom = Math.max(2, pxCell() - 2); return pxDraw(); }
+  if (a === "mirror"){ S.mirror = !S.mirror; return pxRender(); }
+  if (a === "grid"){ S.grid = !S.grid; return pxRender(); }
+  if (a === "size"){ S.size = S.size === 1 ? 2 : S.size === 2 ? 3 : 1; return pxRender(); }
+  if (a === "outline") return pxOutline();
+  if (a === "shade") return pxShade();
+  if (a === "png1") return pxDownload(pxPNG(1), (S.name || "pixel") + ".png");
+  if (a === "png8") return pxDownload(pxPNG(8), (S.name || "pixel") + "@8x.png");
+});
+
 /* ---------- render ---------- */
 function render(){
   if (mode === "loading") return;
   renderNav();
   const a = document.activeElement, fid = a && a.id, val = a && a.value, ss = a && a.selectionStart, se = a && a.selectionEnd;
   let html;
-  if (tab === "apps" && app){ const AV = {tasks: viewTasks, calendar: viewCalendar, goals: viewGoals, food: viewFoodApp, notes: viewNotes, journal: viewNotes, trends: viewTrends, pet: viewPet}[app]; html = (app === "goals" && goalOpen && items[goalOpen] ? "" : `<button class="link back" data-go="apps">‹ Apps</button>`) + AV(); }
+  if (tab === "apps" && app){ const AV = {tasks: viewTasks, calendar: viewCalendar, goals: viewGoals, food: viewFoodApp, notes: viewNotes, journal: viewNotes, trends: viewTrends, pet: viewPet, pixel: viewPixel}[app]; html = (app === "goals" && goalOpen && items[goalOpen] ? "" : `<button class="link back" data-go="apps">‹ Apps</button>`) + AV(); }
   else html = ({today: viewToday, apps: viewApps, settings: viewSettings}[tab] || viewToday)();
   $("#app").innerHTML = html;
   if (fid){ const el = document.getElementById(fid); if (el){ if (val != null && fid !== "journal" && el.type !== "time") el.value = val; el.focus(); try { el.setSelectionRange(ss, se); } catch {} } }
@@ -3569,6 +3734,7 @@ function render(){
   const nq = $("#note-q");
   if (nq){ nq.oninput = () => { noteQuery = nq.value; render(); }; }
   wireCharts();
+  if (tab === "apps" && app === "pixel") mountPixel();
   wireKit();
   const sb = $("#sleep-bed"), sw = $("#sleep-wake");
   if (sb && sw){ const upd = () => { const s = {...(dayDoc(viewDay).sleep||{})}; s.bed = sb.value || null; s.wake = sw.value || null; setDay(viewDay, {sleep: s}); }; sb.onchange = upd; sw.onchange = upd; }
