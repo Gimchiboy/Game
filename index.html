@@ -804,12 +804,12 @@ function recurFields(r, anchor, {none = true} = {}){
   const days = r.days && r.days.length ? r.days : [parse(anchor || today()).getDay()];
   return `<div class="rp">
     <div class="two"><label class="fld"><span>Repeat</span><select name="freq">${Object.entries(FREQ).filter(([k]) => none || k !== "none").map(([k,l]) => `<option value="${k}" ${k===freq?"selected":""}>${l}</option>`).join("")}</select></label>
-      <label class="fld rp-iv"><span>Every</span><div class="ivrow"><input type="number" name="interval" min="1" max="99" value="${r.interval||1}" inputmode="numeric"><span class="sub rp-unit"></span></div></label></div>
+      <label class="fld rp-iv"><span>Every</span><div class="ivrow"><input inputmode="numeric" autocomplete="off" type="text" name="interval" min="1" max="99" value="${r.interval||1}"><span class="sub rp-unit"></span></div></label></div>
     <div class="fld rp-days"><span>On</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${days.includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${days.join(",")}"></div>
     <label class="fld rp-mode"><span>On</span><select name="rmode" data-cur="${r.mode === "nth" ? (r.nth === -1 ? "last" : "nth") : "day"}"></select></label>
     <div class="two rp-end"><label class="fld"><span>Ends</span><select name="ends"><option value="never" ${ends==="never"?"selected":""}>Never</option><option value="on" ${ends==="on"?"selected":""}>On a date</option><option value="after" ${ends==="after"?"selected":""}>After a number of times</option></select></label>
       <label class="fld rp-until"><span>End date</span><input type="date" name="until" value="${esc(r.until||"")}"></label>
-      <label class="fld rp-count"><span>Times</span><input type="number" name="count" min="1" max="999" value="${r.count||10}" inputmode="numeric"></label></div>
+      <label class="fld rp-count"><span>Times</span><input inputmode="numeric" autocomplete="off" type="text" name="count" min="1" max="999" value="${r.count||10}"></label></div>
     <div class="sub rp-sum" style="margin:-4px 0 12px"></div></div>`;
 }
 function wireRecur(S, anchorName){
@@ -862,6 +862,10 @@ const REORDER = {
   tasks: ids => { setOrder(ids); render(); },
   eats: (ids, d) => { const es = eatsOf(d), moved = ids.map(id => es.find(e => e.id === id)).filter(Boolean); setDay(d, {eats: [...es.filter(e => !ids.includes(e.id)), ...moved]}); },
 };
+document.addEventListener("input", e => { const t = e.target;
+  if (t.tagName === "INPUT" && (t.inputMode === "decimal" || t.inputMode === "numeric")){
+    const v = t.value, w = v.replace(/,/g, ".").replace(t.inputMode === "numeric" ? /[^0-9]/g : /[^0-9.\-]/g, "").replace(/(?!^)-/g, "").replace(/(\..*)\./g, "$1");
+    if (w !== v){ const pos = t.selectionStart - (v.length - w.length); t.value = w; try { t.setSelectionRange(pos, pos); } catch {} } } }, true);
 let drag = null;
 document.addEventListener("pointerdown", e => {
   const g = e.target.closest("[data-grip]"); if (!g) return;
@@ -915,7 +919,7 @@ function cfg(){
   const unit = UNITS[w.unit] ? w.unit : "glasses";
   return {
     water: {on: w.on !== false, unit, step: w.step > 0 ? w.step : UNITS[unit].step, weight: w.weight > 0 ? w.weight : null, auto: !!w.auto && w.weight > 0,
-      goal: (w.auto && w.weight > 0) ? (unit === "oz" ? Math.round(w.weight / 2) : unit === "ml" ? Math.round(w.weight / 2 * 29.5735 / 10) * 10 : r1(w.weight / 2 * 29.5735 / UNITS[unit].ml)) : (w.goal > 0 ? w.goal : (s.waterGoal || 8))},
+      goal: (w.auto && w.weight > 0) ? (unit === "oz" ? r1(w.weight / 2) : unit === "ml" ? Math.round(w.weight / 2 * 29.5735 / 10) * 10 : r1(w.weight / 2 * 29.5735 / UNITS[unit].ml)) : (w.goal > 0 ? w.goal : (s.waterGoal || 8))},
     meals: {on: m.on !== false, list: (Array.isArray(m.list) ? m.list : []).filter(x => !(OLD_MEALS[x.id] && OLD_MEALS[x.id] === x.name))},
     sleep: {on: sl.on !== false, goal: sl.goal > 0 ? sl.goal : (s.sleepGoal || 8)},
     journal: {on: s.journalOn !== false},
@@ -952,7 +956,7 @@ function waterBlock(dd){
   return `<div class="rowhead"><input type="checkbox" class="chk" disabled ${full?"checked":""} aria-label="Water goal met">
       <div class="grow"><div class="t">Water ${full?`<span class="full-tag">· FULL</span>`:""}</div><div class="m">${c.goal} ${u} goal${amt > c.goal ? ` · +${r1(amt-c.goal)} extra` : ""}</div></div>
       <button class="btn key" data-water="-1" aria-label="Less water">−</button>
-      <input class="num" id="water-num" type="number" min="0" step="any" inputmode="decimal" value="${amt}" aria-label="Water in ${u}">
+      <input inputmode="decimal" autocomplete="off" class="num" id="water-num" type="text" min="0" value="${amt}" aria-label="Water in ${u}">
       <button class="btn key" data-water="1" aria-label="More water">+</button></div>
     <div class="tank ${full?"full":""}" style="grid-template-columns:repeat(${cells},1fr)" role="group" aria-label="Water: ${amt} of ${c.goal} ${u}">${Array.from({length: cells}, (_, i) => `<button class="${i < filled ? "on" : ""}" data-waterset="${i+1}" aria-label="Set to ${r1((i+1)*c.step)} ${u}"></button>`).join("")}</div>`;
 }
@@ -1284,7 +1288,7 @@ function viewGoals(){
     body = `<div class="bcard"><div class="lbl">Progress</div>${lineChart("goal", pts, g.target, g.unit)}</div>
     <h2>${g.type === "sum" ? "Add money" : "Log an entry"}</h2>
     <form class="card" data-form="goallog" style="padding:12px 16px;display:grid;gap:10px">
-      <div class="two"><label class="fld" style="margin:0"><span style="color:var(--muted)">${g.type === "sum" ? `Amount${g.unit ? " (" + esc(g.unit) + ")" : ""}` : `Value${g.unit ? " (" + esc(g.unit) + ")" : ""}`}</span><input id="gl-val" type="number" step="any" inputmode="decimal" required placeholder="${g.type === "sum" ? "" : esc(String(goalCur(g) ?? ""))}"></label>
+      <div class="two"><label class="fld" style="margin:0"><span style="color:var(--muted)">${g.type === "sum" ? `Amount${g.unit ? " (" + esc(g.unit) + ")" : ""}` : `Value${g.unit ? " (" + esc(g.unit) + ")" : ""}`}</span><input inputmode="decimal" autocomplete="off" id="gl-val" type="text" required placeholder="${g.type === "sum" ? "" : esc(String(goalCur(g) ?? ""))}"></label>
       <label class="fld" style="margin:0"><span style="color:var(--muted)">Date</span><input id="gl-date" type="date" value="${today()}"></label></div>
       <label class="fld" style="margin:0"><span style="color:var(--muted)">Note (optional)</span><input id="gl-note" autocomplete="off"></label>
       <div><button class="btn pri">Save entry</button>${g.type === "sum" ? `<span class="sub" style="margin-left:10px">Use a minus to take money out</span>` : ""}</div></form>
@@ -1317,7 +1321,7 @@ function addGoalLog(id, v, d, note){
 function quickLog(id){
   const g = items[id]; if (!g) return;
   sheet(g.type === "sum" ? "Add to " + g.title : "Log " + g.title, `
-    <div class="two"><label class="fld"><span>${g.type === "sum" ? "Amount" : "Value"}${g.unit ? " (" + esc(g.unit) + ")" : ""}</span><input name="v" type="number" step="any" inputmode="decimal" required></label>
+    <div class="two"><label class="fld"><span>${g.type === "sum" ? "Amount" : "Value"}${g.unit ? " (" + esc(g.unit) + ")" : ""}</span><input inputmode="decimal" autocomplete="off" name="v" type="text" required></label>
     <label class="fld"><span>Date</span><input name="d" type="date" value="${today()}"></label></div>
     <label class="fld"><span>Note (optional)</span><input name="note"></label>`,
     f => { const v = Number(f.v.value); if (f.v.value === "" || isNaN(v)) return "Enter a number."; addGoalLog(id, v, f.d.value || today(), f.note.value.trim()); toast("Logged."); });
@@ -1331,8 +1335,8 @@ function goalSheet(id){
     <label class="fld"><span>Name</span><input name="title" value="${esc(g.title)}" required></label>
     <div class="fld"><span>Category & tags</span>${catPicker(catOf(g), extraIds(g))}</div>
     <label class="fld"><span>Type</span><select name="type">${Object.entries(GTYPES).map(([k, l]) => `<option value="${k}" ${g.type===k?"selected":""}>${l}</option>`).join("")}</select></label>
-    <div class="two g-num"><label class="fld g-start"><span>Starting at</span><input name="start" type="number" step="any" inputmode="decimal" value="${g.start ?? ""}"></label>
-      <label class="fld"><span>Target</span><input name="target" type="number" step="any" inputmode="decimal" value="${g.target ?? ""}"></label></div>
+    <div class="two g-num"><label class="fld g-start"><span>Starting at</span><input inputmode="decimal" autocomplete="off" name="start" type="text" value="${g.start ?? ""}"></label>
+      <label class="fld"><span>Target</span><input inputmode="decimal" autocomplete="off" name="target" type="text" value="${g.target ?? ""}"></label></div>
     <div class="two g-num"><label class="fld"><span>Unit</span><input name="unit" value="${esc(g.unit||"")}" placeholder="Unit"></label>
       <label class="fld"><span>Target date (optional)</span><input name="due" type="date" value="${esc(g.due||"")}"></label></div>
     <label class="fld g-due2"><span>Target date (optional)</span><input name="due2" type="date" value="${esc(g.due||"")}"></label>
@@ -1404,9 +1408,9 @@ function viewFood(){
   <h2>About you</h2>
   <div class="card">
     ${field("Sex", `<div class="seg" data-foodseg="sex">${[["m","Male"],["f","Female"]].map(([k,l]) => `<button type="button" class="${f.sex===k?"on":""}" data-food-sex="${k}">${l}</button>`).join("")}</div>`)}
-    ${field("Age", `<input class="num" id="food-age" type="number" min="18" max="100" inputmode="numeric" value="${f.age}"><span class="sub">years</span>`)}
-    ${field("Height", `<input class="num" id="food-ft" type="number" min="3" max="8" inputmode="numeric" value="${f.ft}" style="width:52px"><span class="sub">ft</span><input class="num" id="food-in" type="number" min="0" max="11" inputmode="numeric" value="${f.inch}" style="width:52px"><span class="sub">in</span>`)}
-    ${field(`Body fat <span class="sub">(optional)</span>`, `<input class="num" id="food-bf" type="number" min="3" max="70" step="any" inputmode="decimal" value="${f.bf}" placeholder="—"><span class="sub">%</span>`)}
+    ${field("Age", `<input inputmode="decimal" autocomplete="off" class="num" id="food-age" type="text" min="18" max="100" value="${f.age}"><span class="sub">years</span>`)}
+    ${field("Height", `<input inputmode="decimal" autocomplete="off" class="num" id="food-ft" type="text" min="3" max="8" value="${f.ft}" style="width:52px"><span class="sub">ft</span><input inputmode="decimal" autocomplete="off" class="num" id="food-in" type="text" min="0" max="11" value="${f.inch}" style="width:52px"><span class="sub">in</span>`)}
+    ${field(`Body fat <span class="sub">(optional)</span>`, `<input inputmode="decimal" autocomplete="off" class="num" id="food-bf" type="text" min="3" max="70" value="${f.bf}" placeholder="—"><span class="sub">%</span>`)}
     <div class="row tap" data-go="settings"><div class="grow"><div class="t">Weight</div><div class="m">Change it in Settings → Water</div></div><span class="sub">${w ? w + " lb" : "Not set"} ›</span></div>
   </div>
   <h2>Activity</h2>
@@ -1560,8 +1564,8 @@ function nutFields(x){
   const q = +x.qty || 1, tot = k => x[k] === "" || x[k] == null ? "" : rN(x[k] * q, k === "kcal" ? 0 : 1);
   return `<div class="sub" style="margin:-2px 0 6px" id="fs-serv" ${x.serving ? "" : "hidden"}>${esc(x.serving || "")}</div>
     <label class="fld" style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><span style="margin:0;flex:1">Scale together<span class="sub" style="display:block;text-transform:none;letter-spacing:0;font-family:var(--sans)">Totals for all servings. Change one number and the rest follow.</span></span><input type="checkbox" class="switch" data-scale checked></label>
-    <div class="two">${NUTS.slice(0,2).map(([k,l]) => `<label class="fld"><span>${l}</span><input name="${k}" type="number" min="0" step="any" inputmode="decimal" value="${tot(k)}" ${k==="kcal"?"required":""}></label>`).join("")}</div>
-    <div class="two">${NUTS.slice(2).map(([k,l]) => `<label class="fld"><span>${l}</span><input name="${k}" type="number" min="0" step="any" inputmode="decimal" value="${tot(k)}"></label>`).join("")}</div>`;
+    <div class="two">${NUTS.slice(0,2).map(([k,l]) => `<label class="fld"><span>${l}</span><input inputmode="decimal" autocomplete="off" name="${k}" type="text" min="0" value="${tot(k)}" ${k==="kcal"?"required":""}></label>`).join("")}</div>
+    <div class="two">${NUTS.slice(2).map(([k,l]) => `<label class="fld"><span>${l}</span><input inputmode="decimal" autocomplete="off" name="${k}" type="text" min="0" value="${tot(k)}"></label>`).join("")}</div>`;
 }
 function wireScaler(S, x){
   const num = v => v === "" || v == null || isNaN(+v) ? null : +v;
@@ -1614,7 +1618,7 @@ function repeatSheet(id){
     ${id ? "" : `<div class="fld"><span>Search foods</span><div class="quick" style="margin-top:0"><input id="fs-q" placeholder="Search" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-fs-go>Search</button>${"BarcodeDetector" in window ? `<button type="button" class="btn" data-fs-scan aria-label="Scan barcode">Scan</button>` : ""}</div><div id="fs-out" class="fsout"></div></div>`}
     ${!id && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(f => `<button type="button" class="chip" data-pick="${f.id}">${esc(f.name)}</button>`).join("")}</div></div>` : ""}
     <label class="fld"><span>Food</span><input name="name" value="${esc(x.name)}" required></label>
-    <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.01" step="any" inputmode="decimal" value="${x.qty || 1}"></label>
+    <div class="two"><label class="fld"><span>Servings</span><input inputmode="decimal" autocomplete="off" name="qty" type="text" min="0.01" value="${x.qty || 1}"></label>
       <label class="fld"><span>Meal</span>${mealSelect(x.meal)}</label></div>
     <label class="fld"><span>Starts</span><input type="date" name="start" value="${esc(start)}"></label>
     ${recurFields(rule.repeat, start, {none: false})}
@@ -1697,7 +1701,7 @@ function foodEntrySheet(meal, editId){
     ${cur ? "" : `<div class="fld"><span>Search foods</span><div class="quick" style="margin-top:0"><input id="fs-q" placeholder="Search" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-fs-go>Search</button>${"BarcodeDetector" in window ? `<button type="button" class="btn" data-fs-scan aria-label="Scan barcode">Scan</button>` : ""}</div><div id="fs-out" class="fsout"></div></div>`}
     ${!cur && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(x => `<button type="button" class="chip" data-pick="${x.id}">${esc(x.name)}</button>`).join("")}</div></div>` : ""}
     <label class="fld"><span>Food</span><input name="name" value="${esc(e.name)}" required></label>
-    <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.01" step="any" inputmode="decimal" value="${e.qty || 1}"></label>
+    <div class="two"><label class="fld"><span>Servings</span><input inputmode="decimal" autocomplete="off" name="qty" type="text" min="0.01" value="${e.qty || 1}"></label>
       <label class="fld"><span>Meal</span>${mealSelect(e.meal)}</label></div>
     ${nutFields(e)}
     ${cur ? "" : `<label class="fld" style="display:flex;align-items:center;gap:12px"><span style="margin:0;flex:1">Save to My foods</span><input type="checkbox" class="switch" name="keep" checked></label>`}`,
@@ -1726,10 +1730,10 @@ function foodItemSheet(id){
   sheet(id ? "Edit food" : "New food", `
     <label class="fld"><span>Food</span><input name="name" value="${esc(x.name)}" required></label>
     <label class="fld"><span>Serving size (optional)</span><input name="serving" value="${esc(x.serving || "")}"></label>
-    <div class="two"><label class="fld"><span>Calories</span><input name="kcal" type="number" min="0" step="any" inputmode="decimal" value="${x.kcal}" required></label>
-      <label class="fld"><span>Protein (g)</span><input name="p" type="number" min="0" step="any" inputmode="decimal" value="${x.p}"></label></div>
-    <div class="two"><label class="fld"><span>Carbs (g)</span><input name="c" type="number" min="0" step="any" inputmode="decimal" value="${x.c}"></label>
-      <label class="fld"><span>Fat (g)</span><input name="f" type="number" min="0" step="any" inputmode="decimal" value="${x.f}"></label></div>`,
+    <div class="two"><label class="fld"><span>Calories</span><input inputmode="decimal" autocomplete="off" name="kcal" type="text" min="0" value="${x.kcal}" required></label>
+      <label class="fld"><span>Protein (g)</span><input inputmode="decimal" autocomplete="off" name="p" type="text" min="0" value="${x.p}"></label></div>
+    <div class="two"><label class="fld"><span>Carbs (g)</span><input inputmode="decimal" autocomplete="off" name="c" type="text" min="0" value="${x.c}"></label>
+      <label class="fld"><span>Fat (g)</span><input inputmode="decimal" autocomplete="off" name="f" type="text" min="0" value="${x.f}"></label></div>`,
     f => { const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories.";
       const n = v => Math.max(0, Number(v) || 0);
       put(id || uid(), {...(id ? items[id] : {kind: "foodItem", last: Date.now()}), name, serving: f.serving.value.trim(), kcal: n(f.kcal.value), p: n(f.p.value), c: n(f.c.value), f: n(f.f.value)}); },
@@ -1917,10 +1921,10 @@ function viewSettings(){
   <div class="card">
     ${sw("water", c.water.on, "Show on Today")}
     <div class="row"><div class="grow t">Unit</div><select class="sel" id="set-water-unit">${Object.entries(UNITS).map(([k, v]) => `<option value="${k}" ${k===c.water.unit?"selected":""}>${v.n}</option>`).join("")}</select></div>
-    <div class="row"><div class="grow"><div class="t">Each tap adds</div><div class="m">One block in the tank</div></div><input class="num" id="set-water-step" type="number" min="0.1" step="any" inputmode="decimal" value="${c.water.step}"><span class="sub">${u}</span></div>
-    <div class="row"><div class="grow"><div class="t">My weight</div><div class="m">Used for the goal below</div></div><input class="num" id="set-weight" type="number" min="50" max="700" step="any" inputmode="decimal" value="${c.water.weight || ""}" placeholder="—"><span class="sub">lb</span></div>
-    <label class="row"><div class="grow"><div class="t">Goal = half my weight in oz</div><div class="m">${c.water.weight ? `${c.water.weight} lb ÷ 2 = ${Math.round(c.water.weight / 2)} oz a day` : "Enter your weight first"}</div></div><input type="checkbox" class="switch" data-toggle="wauto" ${c.water.auto?"checked":""} ${c.water.weight?"":"disabled"}></label>
-    <div class="row"><div class="grow"><div class="t">Daily goal</div><div class="m">${c.water.auto ? "Set from your weight · " : ""}${Math.min(24, Math.max(1, Math.round(c.water.goal / c.water.step)))} blocks to fill</div></div><input class="num" id="set-water-goal" type="number" min="0.1" step="any" inputmode="decimal" value="${c.water.goal}" ${c.water.auto?"disabled":""}><span class="sub">${u}</span></div>
+    <div class="row"><div class="grow"><div class="t">Each tap adds</div><div class="m">One block in the tank</div></div><input inputmode="decimal" autocomplete="off" class="num" id="set-water-step" type="text" min="0.1" value="${c.water.step}"><span class="sub">${u}</span></div>
+    <div class="row"><div class="grow"><div class="t">My weight</div><div class="m">Used for the goal below</div></div><input inputmode="decimal" autocomplete="off" class="num" id="set-weight" type="text" min="50" max="700" value="${c.water.weight || ""}" placeholder="—"><span class="sub">lb</span></div>
+    <label class="row"><div class="grow"><div class="t">Goal = half my weight in oz</div><div class="m">${c.water.weight ? `${c.water.weight} lb ÷ 2 = ${r1(c.water.weight / 2)} oz a day` : "Enter your weight first"}</div></div><input type="checkbox" class="switch" data-toggle="wauto" ${c.water.auto?"checked":""} ${c.water.weight?"":"disabled"}></label>
+    <div class="row"><div class="grow"><div class="t">Daily goal</div><div class="m">${c.water.auto ? "Set from your weight · " : ""}${Math.min(24, Math.max(1, Math.round(c.water.goal / c.water.step)))} blocks to fill</div></div><input inputmode="decimal" autocomplete="off" class="num" id="set-water-goal" type="text" min="0.1" value="${c.water.goal}" ${c.water.auto?"disabled":""}><span class="sub">${u}</span></div>
   </div>
 
   <h2>Meal times</h2>
@@ -1933,7 +1937,7 @@ function viewSettings(){
   <h2>Sleep</h2>
   <div class="card">
     ${sw("sleep", c.sleep.on, "Show on Today")}
-    <div class="row"><div class="grow t">Goal</div><input class="num" id="set-sleep-goal" type="number" min="3" max="14" step="0.5" inputmode="decimal" value="${c.sleep.goal}"><span class="sub">hours</span></div>
+    <div class="row"><div class="grow t">Goal</div><input inputmode="decimal" autocomplete="off" class="num" id="set-sleep-goal" type="text" min="3" max="14" value="${c.sleep.goal}"><span class="sub">hours</span></div>
   </div>
 
   <h2>Habits</h2>
@@ -1993,7 +1997,7 @@ document.addEventListener("change", e => {
   if (el.id === "set-water-step"){ if (num() > 0) saveCfg({water: {...rawWater(), step: num()}}); else render(); return; }
   if (el.id === "food-age"){ const v = Math.round(num()); if (v >= 18 && v <= 100) saveFood({age: v}); else { toast("Age 18–100."); render(); } return; }
   if (el.id === "food-ft"){ const v = Math.round(num()); if (v >= 3 && v <= 8) saveFood({ft: v}); else render(); return; }
-  if (el.id === "food-in"){ const v = Math.round(num()); if (v >= 0 && v <= 11) saveFood({inch: v}); else render(); return; }
+  if (el.id === "food-in"){ const v = Math.round(num() * 10) / 10; if (v >= 0 && v < 12) saveFood({inch: v}); else render(); return; }
   if (el.id === "food-pro"){ saveFood({proL: Math.round(num() * 10) / 10}); return; }
   if (el.id === "food-bf"){ const v = num(); if (el.value === "" ) saveFood({bf: ""}); else if (v >= 3 && v <= 70) saveFood({bf: Math.round(v * 10) / 10}); else { toast("Body fat 3–70%."); render(); } return; }
   if (el.id === "set-fdc"){ saveCfg({fdcKey: el.value.trim()}); return; }
