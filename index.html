@@ -384,8 +384,16 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .phs .ph{font-size:13px;margin:0}
 .pbar{width:70%;height:12px;border:2px solid var(--ink);border-radius:4px}.pbar i{display:block;height:100%;background:var(--ink)}
 .petmini{width:38px;height:auto;max-height:38px;flex:none;fill:var(--ink)}
+.petmini.big{width:56px;max-height:56px}
+.pgrid,.pmates{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pcell,.pmate,.tnode{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:14px;background:var(--lcd);border:1px solid var(--line);color:var(--ink);min-width:0;font-size:13px}
+.pcell span,.pmate span,.tnode span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcell small,.pmate small,.tnode small{color:var(--muted);font-size:11px}
+.trow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center}.tnode{width:96px}.tnode.empty{opacity:.5;min-height:80px;justify-content:center}
+.swatch{width:26px;height:26px;border-radius:50%;background:var(--sw);border:1px solid var(--line)}
 .howto p{margin:0 0 10px;font-size:14px;line-height:1.45}
 details > summary{list-style:none}details > summary::-webkit-details-marker{display:none}
+.rpo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0;text-transform:none;letter-spacing:0;font:inherit}.rpo input[type=radio]{width:18px;height:18px;margin:0;flex:none}.rpo .num{width:70px;flex:none}.rpo .sel{flex:1 1 34%;min-width:110px;max-width:none;width:auto}.rpo > span{white-space:nowrap}.rp-y{display:flex;align-items:center;gap:8px;flex:1 1 40%}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
 
@@ -779,14 +787,21 @@ function rMatch(e, x){
     case "weekly": { const days = r.days && r.days.length ? r.days : [a.getDay()]; if (!days.includes(b.getDay())) return false;
       const wk = Math.round(((dIdx(x) - b.getDay()) - (dIdx(e.date) - a.getDay())) / 7); return wk % iv === 0; }
     case "monthly": { const mo = (b.getFullYear()-a.getFullYear())*12 + b.getMonth() - a.getMonth(); return mo % iv === 0 && dayMatch(r, a, b); }
-    case "yearly": return b.getMonth() === a.getMonth() && (b.getFullYear() - a.getFullYear()) % iv === 0 && dayMatch(r, a, b);
+    case "yearly": return b.getMonth() === (r.month ?? a.getMonth()) && (b.getFullYear() - a.getFullYear()) % iv === 0 && dayMatch(r, a, b);
   }
   return false;
 }
 const dim = b => new Date(b.getFullYear(), b.getMonth() + 1, 0).getDate();
+function nthKind(b, kind){ // position of b among days of its month matching kind, and the count of them
+  const ok = d => kind === "day" ? true : kind === "weekday" ? (d > 0 && d < 6) : kind === "weekend" ? (d === 0 || d === 6) : d === kind;
+  if (!ok(b.getDay())) return null;
+  let n = 0, tot = 0; const D = dim(b), y = b.getFullYear(), m = b.getMonth();
+  for (let i = 1; i <= D; i++){ if (ok(new Date(y, m, i).getDay())){ tot++; if (i <= b.getDate()) n = tot; } }
+  return {n, tot};
+}
 function dayMatch(r, a, b){
-  if (r.mode === "nth"){ if (b.getDay() !== r.wd) return false; return r.nth === -1 ? b.getDate() + 7 > dim(b) : Math.ceil(b.getDate() / 7) === r.nth; }
-  return b.getDate() === Math.min(a.getDate(), dim(b));
+  if (r.mode === "nth"){ const k = nthKind(b, r.wd); if (!k) return false; return r.nth === -1 ? k.n === k.tot : k.n === r.nth; }
+  return b.getDate() === Math.min(r.dom || a.getDate(), dim(b));
 }
 const countEnd = new Map();
 function lastByCount(e){
@@ -817,8 +832,9 @@ function repeatText(r, anchor){
   const iv = Math.max(1, r.interval || 1), unit = {daily:"day", weekly:"week", monthly:"month", yearly:"year"}[r.freq], a = anchor ? parse(anchor) : null;
   let t = r.freq === "weekdays" ? "Weekdays" : iv > 1 ? `Every ${iv} ${unit}s` : {daily:"Daily", weekly:"Weekly", monthly:"Monthly", yearly:"Yearly"}[r.freq];
   if (r.freq === "weekly" && r.days && r.days.length){ const ds = r.days.slice().sort(); t += " on " + (ds.join() === "0,6" ? "weekends" : ds.join() === "1,2,3,4,5" ? "weekdays" : ds.length === 7 ? "every day" : ds.map(d => DOW[d].slice(0, 3)).join(", ")); }
-  if (r.freq === "monthly") t += r.mode === "nth" ? ` on the ${NTH[r.nth]} ${DAYF[r.wd]}` : a ? ` on day ${a.getDate()}` : "";
-  if (r.freq === "yearly" && a) t += r.mode === "nth" ? ` on the ${NTH[r.nth]} ${DAYF[r.wd]} of ${MON[a.getMonth()]}` : ` on ${MON[a.getMonth()]} ${a.getDate()}`;
+  const wdN = w => typeof w === "number" ? DAYF[w] : w === "weekend" ? "weekend day" : w;
+  if (r.freq === "monthly") t += r.mode === "nth" ? ` on the ${NTH[r.nth]} ${wdN(r.wd)}` : (r.dom || a) ? ` on day ${r.dom || a.getDate()}` : "";
+  if (r.freq === "yearly" && (a || r.month != null)){ const mo = MON[r.month ?? a.getMonth()]; t += r.mode === "nth" ? ` on the ${NTH[r.nth]} ${wdN(r.wd)} of ${mo}` : ` on ${mo} ${r.dom || a.getDate()}`; }
   if (r.until) t += ` until ${fmtDay(r.until)}`; else if (r.count) t += `, ${r.count} times`;
   return t;
 }
@@ -829,7 +845,14 @@ function recurFields(r, anchor, {none = true} = {}){
     <div class="two"><label class="fld"><span>Repeat</span><select name="freq">${Object.entries(FREQ).filter(([k]) => none || k !== "none").map(([k,l]) => `<option value="${k}" ${k===freq?"selected":""}>${l}</option>`).join("")}</select></label>
       <label class="fld rp-iv"><span>Every</span><div class="ivrow"><input inputmode="numeric" autocomplete="off" type="text" name="interval" min="1" max="99" value="${r.interval||1}"><span class="sub rp-unit"></span></div></label></div>
     <div class="fld rp-days"><span>On</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${days.includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${days.join(",")}"></div>
-    <label class="fld rp-mode"><span>On</span><select name="rmode" data-cur="${r.mode === "nth" ? (r.nth === -1 ? "last" : "nth") : "day"}"></select></label>
+    ${(() => { const a = parse(anchor || today()), nthD = Math.ceil(a.getDate() / 7), last = a.getDate() + 7 > dim(a);
+      const mode = r.mode === "nth" ? "nth" : "day", dom = r.dom || a.getDate(), nth = r.nth ?? (last && nthD > 4 ? -1 : Math.min(4, nthD)), wd = r.wd ?? a.getDay(), mo = r.month ?? a.getMonth();
+      const moSel = `<select class="sel rp-mo" name="rmonth" aria-label="Month">${MON.map((m, i) => `<option value="${i}" ${i === mo ? "selected" : ""}>${m}</option>`).join("")}</select>`;
+      const wds = [["day","day"],["weekday","weekday"],["weekend","weekend day"],...DAYF.map((d, i) => [String(i), d])];
+      return `<div class="fld rp-mode"><span>On</span>
+        <label class="rpo"><input type="radio" name="rmode" value="day" ${mode === "day" ? "checked" : ""}><span class="rp-y">${moSel.replace('name="rmonth"', 'name="rmonth1"')}</span><span class="rp-m">Day</span><input class="num" name="dom" inputmode="numeric" autocomplete="off" value="${dom}" aria-label="Day of month"></label>
+        <label class="rpo"><input type="radio" name="rmode" value="nth" ${mode === "nth" ? "checked" : ""}><span>The</span><select class="sel" name="rnth" aria-label="Which">${[[1,"first"],[2,"second"],[3,"third"],[4,"fourth"],[-1,"last"]].map(([v, l]) => `<option value="${v}" ${v === nth ? "selected" : ""}>${l}</option>`).join("")}</select>
+          <select class="sel" name="rwd" aria-label="Day">${wds.map(([v, l]) => `<option value="${v}" ${String(wd) === v ? "selected" : ""}>${l}</option>`).join("")}</select><span class="rp-y">of ${moSel.replace('name="rmonth"', 'name="rmonth2"')}</span></label></div>`; })()}
     <div class="two rp-end"><label class="fld"><span>Ends</span><select name="ends"><option value="never" ${ends==="never"?"selected":""}>Never</option><option value="on" ${ends==="on"?"selected":""}>On a date</option><option value="after" ${ends==="after"?"selected":""}>After a number of times</option></select></label>
       <label class="fld rp-until"><span>End date</span><input type="date" name="until" value="${esc(r.until||"")}"></label>
       <label class="fld rp-count"><span>Times</span><input inputmode="numeric" autocomplete="off" type="text" name="count" min="1" max="999" value="${r.count||10}"></label></div>
@@ -846,14 +869,14 @@ function wireRecur(S, anchorName){
     S.querySelector(".rp-end").style.display = fq === "none" ? "none" : "";
     S.querySelector(".rp-until").style.display = en === "on" ? "" : "none";
     S.querySelector(".rp-count").style.display = en === "after" ? "" : "none";
-    const sel = q("rmode"), cur = sel.value || sel.dataset.cur || "day", of = fq === "yearly" ? ` of ${MON[a.getMonth()]}` : "";
-    const opts = [["day", fq === "yearly" ? `${MON[a.getMonth()]} ${a.getDate()}` : `Day ${a.getDate()}${a.getDate() > 28 ? " (or the last day)" : ""}`]];
-    if (nth <= 4) opts.push(["nth", `The ${NTH[nth]} ${DAYF[a.getDay()]}${of}`]);
-    if (isLast) opts.push(["last", `The last ${DAYF[a.getDay()]}${of}`]);
-    sel.innerHTML = opts.map(([k, l]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(l)}</option>`).join("");
+    void dm; void nth; void isLast;
+    S.querySelectorAll(".rp-y").forEach(x => x.style.display = fq === "yearly" ? "" : "none");
+    S.querySelectorAll(".rp-m").forEach(x => x.style.display = fq === "yearly" ? "none" : "");
     const rr = readRecur(S, A()); S.querySelector(".rp-sum").textContent = rr && typeof rr === "object" ? repeatText(rr, A()) : "";
   };
-  S.querySelectorAll("[name=freq],[name=ends],[name=rmode],[name=interval],[name=count],[name=until]").forEach(x => { x.addEventListener("change", sync); x.addEventListener("input", sync); });
+  S.querySelectorAll("[name=rmonth1],[name=rmonth2]").forEach(x => x.addEventListener("change", () => S.querySelectorAll("[name=rmonth1],[name=rmonth2]").forEach(y => y.value = x.value)));
+  S.querySelectorAll("[name=dom],[name=rnth],[name=rwd],[name=rmonth1],[name=rmonth2]").forEach(x => x.addEventListener(x.tagName === "SELECT" ? "change" : "input", () => { const rr = x.closest(".rpo").querySelector("[name=rmode]"); rr.checked = true; }));
+  S.querySelectorAll("[name=freq],[name=ends],[name=rmode],[name=interval],[name=count],[name=until],[name=dom],[name=rnth],[name=rwd],[name=rmonth1],[name=rmonth2]").forEach(x => { x.addEventListener("change", sync); x.addEventListener("input", sync); });
   if (q(anchorName)) q(anchorName).addEventListener("change", sync);
   S.querySelector(".rp-days [data-daypick]").addEventListener("click", () => setTimeout(sync, 0));
   sync(); return sync;
@@ -862,7 +885,12 @@ function readRecur(f, anchor){
   const q = n => f.querySelector(`[name=${n}]`), fq = q("freq").value; if (fq === "none") return null;
   const a = parse(anchor), rep = {freq: fq, interval: fq === "weekdays" ? 1 : Math.max(1, Math.min(99, parseInt(q("interval").value) || 1))};
   if (fq === "weekly"){ rep.days = q("days").value.split(",").filter(x => x !== "").map(Number); if (!rep.days.length) rep.days = [a.getDay()]; }
-  if (fq === "monthly" || fq === "yearly"){ const m = q("rmode").value; if (m === "nth" || m === "last"){ rep.mode = "nth"; rep.nth = m === "last" ? -1 : Math.ceil(a.getDate() / 7); rep.wd = a.getDay(); } }
+  if (fq === "monthly" || fq === "yearly"){
+    const m = (f.querySelector("[name=rmode]:checked") || {}).value || "day";
+    if (m === "nth"){ rep.mode = "nth"; rep.nth = Number(q("rnth").value); const w = q("rwd").value; rep.wd = /^\d$/.test(w) ? Number(w) : w; }
+    else { const d = parseInt(q("dom").value); if (!(d >= 1 && d <= 31)) return "Pick a day of the month from 1 to 31."; rep.dom = d; }
+    if (fq === "yearly") rep.month = Number(q("rmonth1").value);
+  }
   if (q("ends").value === "on"){ if (!q("until").value) return "Pick when the repeat ends."; if (q("until").value < anchor) return "Repeat end is before the start."; rep.until = q("until").value; }
   if (q("ends").value === "after") rep.count = Math.max(1, parseInt(q("count").value) || 1);
   return rep;
@@ -2452,9 +2480,9 @@ const sprH = k => SPR[k].split("\n").length, sprW = k => SPR[k].split("\n")[0].l
 function petRng(P, n, salt){ let t = (P.seed + n * 2654435761 + salt * 40503) >>> 0;
   t += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }
 const petCfg = () => { const s = (items.settings || {}).pet || {}; return {on: s.on !== false, bed: s.bed || "22:00", wake: s.wake || "08:00"}; };
-function newPet(name){
+function newPet(name, genes, gen, parents){
   const now = Date.now();
-  return {kind: "pet", name: name || "", seed: (Math.random() * 2 ** 31) >>> 0, born: now, stage: "egg", form: "egg", stageAt: now, last: Math.floor(now / MIN) * MIN,
+  return {kind: "pet", id: uid(), genes: genes || randGenes(), gen: gen || 1, parents: parents || [], name: name || "", seed: (Math.random() * 2 ** 31) >>> 0, born: now, stage: "egg", form: "egg", stageAt: now, last: Math.floor(now / MIN) * MIN,
     hunger: 0, happy: 0, disc: 0, weight: 5, poops: 0, sick: false, doses: 0, asleep: false, lights: true,
     hT: 0, pT: 0, poopMin: 0, zeroMin: 0, sickMin: 0, call: null, care: 0, discM: 0, sCare: 0, sDisc: 0, nextFalse: null, lifeEnd: null, paused: false, dead: null, hatched: null};
 }
@@ -2520,7 +2548,9 @@ function petSim(P, until = Date.now()){
 let petAnim = null, petGame = null, petStat = 0, petFrame = 0, petX = 12, petDir = 1;
 function pet(){ return items.pet && items.pet.kind === "pet" ? items.pet : null; }
 function petSave(P, silent = true){ put("pet", {...P}, {silent}); }
-function petNow(){ const P = pet(); if (!P) return null; const before = JSON.stringify(P); const Q = petSim(JSON.parse(before)); if (JSON.stringify(Q) !== before) items.pet = Q, petSave(Q); return items.pet; }
+function petNow(){ let P = pet(); if (!P) return null;
+  if (!P.genes || !P.id){ let s = P.seed || 7; const r = () => (s = (s * 16807 + 11) % 2147483647) / 2147483647; P = {...P, genes: P.genes || randGenes(r), id: P.id || uid(), gen: P.gen || 1, parents: P.parents || []}; items.pet = P; petSave(P); }
+  const before = JSON.stringify(P); const Q = petSim(JSON.parse(before)); if (JSON.stringify(Q) !== before) items.pet = Q, petSave(Q); return items.pet; }
 function petShow(kind, ms = 1600){ petAnim = {kind, until: Date.now() + ms}; petPaint(); }
 function petAct(a){
   let P = petNow(); if (!P) return;
@@ -2559,20 +2589,20 @@ function petGuess(dir){
 function petScreen(P, frame){
   const r = [];
   const dark = !P.lights;
-  if (P.dead){ r.push(sprRects("grave", 16, 15)); }
+  if (P.dead){ r.push(paintGrid(SPR.grave.split("\n"), 16, 15)); }
   else if (petGame){
-    const k = P.form, lk = petGame.look, h = sprH(k);
-    r.push(sprRects(k, 12, 24 - h, {flip: lk === "l"}));
+    const lk = petGame.look, G = petGrid(P), h = G.length;
+    r.push(paintGrid(G, 12, 24 - h, {flip: lk === "l", genes: P.genes}));
     if (petGame.res === "hit") r.push(sprRects("heart", 40, 1));
   } else if (P.stage === "egg"){
-    r.push(sprRects("egg", 12 + (frame % 2), 24 - sprH("egg")));
+    r.push(paintGrid(SPR.egg.split("\n"), 12 + (frame % 2), 24 - sprH("egg"), {genes: P.genes}));
   } else {
-    const k = P.form, h = sprH(k), w = sprW(k);
+    const G = petGrid(P), h = G.length, w = G[0].length;
     const A = petAnim && petAnim.until > Date.now() ? petAnim.kind : null;
     let x = P.asleep ? 12 : A ? 16 : petX, y = 24 - h - (!P.asleep && frame % 2 && !A ? 1 : 0);
     if (A === "meal" || A === "snack"){ const f = Math.floor((petAnim.until - Date.now()) / 400); r.push(sprRects(A, 4, 24 - sprH(A) - 1)); if (f % 2) y -= 1; }
     if (A === "no"){ x = 12 + (frame % 2 ? 1 : -1); }
-    r.push(sprRects(k, Math.max(0, Math.min(48 - w, x)), y, {flip: !P.asleep && !A && petDir < 0, sleep: P.asleep}));
+    r.push(paintGrid(G, Math.max(0, Math.min(48 - w, x)), y, {flip: !P.asleep && !A && petDir < 0, sleep: P.asleep, genes: P.genes}));
     if (P.asleep) r.push(sprRects("z", 1, 1 + (frame % 2)));
     if (P.sick) r.push(sprRects("skull", 0, 0));
     if (A === "scold") r.push(`<rect x="3" y="1" width="1" height="5"/><rect x="3" y="7" width="1" height="1"/>`);
@@ -2595,7 +2625,7 @@ function petOverlay(P){
     `<div class="pl">Hungry</div><div>${hearts(P.hunger)}</div>`,
     `<div class="pl">Happy</div><div>${hearts(P.happy)}</div>`,
     `<div class="pl">Discipline</div><div class="pbar"><i style="width:${P.disc}%"></i></div>`,
-    `<div class="pl">${esc(PET_FORMS[P.form])} · ${PET_STAGES[P.stage].n}</div><div>Age ${ageD} day${ageD === 1 ? "" : "s"} · ${P.weight} g</div>`,
+    `<div class="pl">${esc(PET_FORMS[P.form])} · ${PET_STAGES[P.stage].n} · Gen ${P.gen || 1}</div><div>Age ${ageD} day${ageD === 1 ? "" : "s"} · ${P.weight} g</div>`,
   ];
   return `<div class="pov" data-pet="status">${pages[(petStat - 1) % 4]}</div>`;
 }
@@ -2603,7 +2633,7 @@ function petTick(){
   petFrame++;
   const P = pet(); if (!P) return;
   if (!P.asleep && !petGame && !(petAnim && petAnim.until > Date.now())){
-    const w = sprW(P.form || "pip"); if (petRng(P, petFrame, 11) < 0.25) petDir = -petDir;
+    const w = petGrid(P)[0].length; if (petRng(P, petFrame, 11) < 0.25) petDir = -petDir;
     petX += petDir; if (petX < 0){ petX = 0; petDir = 1; } if (petX > 48 - w - 9){ petX = 48 - w - 9; petDir = -1; }
   }
   if (petAnim && petAnim.until <= Date.now()) petAnim = null;
@@ -2647,7 +2677,7 @@ function viewPet(){
   const pastHtml = past.length ? `<h2>Past pets</h2><div class="card">${past.map(x => `<div class="row"><div class="grow"><div class="t">${esc(x.name || PET_FORMS[x.form])}</div><div class="m">${esc(PET_FORMS[x.form])} · ${x.days} day${x.days === 1 ? "" : "s"} · ${esc(x.why)}</div></div></div>`).join("")}</div>` : "";
   if (!P) return `<div class="kicker">Virtual pet</div><h1>Pet</h1>
     <div class="card" style="margin-top:16px"><div class="empty">No pet yet. It starts as an egg and hatches in 5 minutes.</div></div>
-    <form class="quick" data-form="pet-new" style="margin-top:12px"><input id="pet-name" placeholder="Name (optional)" autocomplete="off" maxlength="16"><button class="btn pri">Get an egg</button></form>${how}${settings}${pastHtml}`;
+    <form class="quick" data-form="pet-new" style="margin-top:12px"><input id="pet-name" placeholder="Name (optional)" autocomplete="off" maxlength="16"><button class="btn pri">Get an egg</button></form>${collectionHtml()}${how}${settings}${pastHtml}`;
   const call = P.call && (P.call.type !== "lights" || P.lights) && !P.dead;
   const title = P.name || PET_FORMS[P.form];
   const why = {age: "Lived a full life", sick: "Got sick and wasn't treated", neglect: "Went too long without care"};
@@ -2659,18 +2689,20 @@ function viewPet(){
     ${petGame ? `<div class="pgame">${petGame.res ? (petGame.res === "hit" ? "Got it!" : "Missed") : "Which way will it look?"} <span>Round ${Math.min(5, petGame.round + (petGame.res ? 0 : 1))} of 5 · ${petGame.wins} won</span></div><div class="prow two"><button class="btn" data-pet="left">◀ Left</button><button class="btn" data-pet="right">Right ▶</button></div>` : ""}
     <div class="prow">${petBtn("clean", "Clean")}${petBtn("lights", "Light", P.lights ? "" : "lit")}${petBtn("status", "Status")}${petBtn("scold", "Scold")}<span class="pbtn bell ${call ? "on" : ""}" aria-label="${call ? "Calling" : "Quiet"}"><svg viewBox="0 0 24 24">${PI.call}</svg><span>${call ? "Calling" : "Quiet"}</span></span></div>
   </div>
+  ${!P.dead && P.stage === "adult" ? `<div class="chips" style="margin-top:14px"><button class="btn pri" data-pet-x="pair">Find a partner</button><button class="btn" data-pet-x="store">Store in collection</button><button class="btn" data-pet-x="tree">Family tree</button></div>` : !P.dead && P.parents && P.parents.length ? `<div style="margin-top:10px"><button class="link" data-pet-x="tree" style="padding:4px 0">Family tree</button></div>` : ""}
   ${P.dead ? `<form class="quick" data-form="pet-new" style="margin-top:16px"><input id="pet-name" placeholder="Name (optional)" autocomplete="off" maxlength="16"><button class="btn pri">New egg</button></form>` : ""}
-  ${how}${settings}${pastHtml}`;
+  ${collectionHtml()}${how}${settings}${pastHtml}`;
 }
+document.addEventListener("click", e => { const b = e.target.closest("[data-pet-x]"); if (!b) return; const a = b.dataset.petX, P = petNow(); if (!P) return;
+  if (a === "store") storePet(); else if (a === "pair") pairSheet("current"); else if (a === "tree") treeSheet(e0id(P)); });
 const petVis = P => P ? JSON.stringify([P.hunger, P.happy, !!P.call, P.asleep, !!P.dead, P.stage, P.form, P.poops, P.sick, P.lights, P.paused]) : "";
 function petRender(){ if (app === "pet") render(); }
 function petTodayRow(){
   const P = petNow(); if (!P || !petCfg().on) return "";
   const call = P.call && (P.call.type !== "lights" || P.lights) && !P.dead;
-  const k = P.dead ? "grave" : P.form, h = sprH(k), w = sprW(k);
   const st = P.dead ? "Passed away" : P.paused ? "Paused" : P.stage === "egg" ? "Hatching" : P.asleep ? "Asleep" : `<span class="phs">${hearts(P.hunger)}</span> <span class="phs">${hearts(P.happy)}</span>`;
   return `<div class="card" style="margin-top:14px"><div class="row tap" data-go="pet">
-    <svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" class="petmini" aria-hidden="true">${sprRects(k, 0, 0, {sleep: P.asleep})}</svg>
+    ${petMini(P)}
     <div class="grow"><div class="t">${esc(P.name || PET_FORMS[P.form])}${call ? ` <span class="tag warn">Needs you</span>` : ""}</div><div class="m">${st}</div></div><span class="sub">›</span></div></div>`;
 }
 document.addEventListener("click", e => {
@@ -2689,9 +2721,253 @@ document.addEventListener("submit", e => {
   const f = e.target; if (!f.dataset || f.dataset.form !== "pet-new") return;
   e.preventDefault(); e.stopImmediatePropagation();
   const old = pet(), name = (f.querySelector("#pet-name") || {}).value || "";
-  if (old && old.dead){ const s = items.settings || {}; saveCfg({petPast: [...(s.petPast || []), {name: old.name, form: old.form, days: old.hatched ? Math.floor((old.dead.at - old.hatched) / DAY) : 0, why: ({age: "Old age", sick: "Sickness", neglect: "Neglect"})[old.dead.why] || ""}].slice(-20)}); }
+  if (old && old.dead && old.genes){ saveBook([...book(), toBook(old, "passed", {why: ({age: "Old age", sick: "Sickness", neglect: "Neglect"})[old.dead.why] || "", days: old.hatched ? Math.floor((old.dead.at - old.hatched) / DAY) : 0})]); }
+  else if (old && old.dead){ const s = items.settings || {}; saveCfg({petPast: [...(s.petPast || []), {name: old.name, form: old.form, days: old.hatched ? Math.floor((old.dead.at - old.hatched) / DAY) : 0, why: ({age: "Old age", sick: "Sickness", neglect: "Neglect"})[old.dead.why] || ""}].slice(-20)}); }
   petGame = null; petStat = 0; put("pet", newPet(name.trim()));
 }, true);
+
+/* ---------- Pet genetics: shapes, features, colors, breeding ---------- */
+const GENES = {
+  shape: ["round", "tall", "wide", "pear", "bean", "drop"],
+  top: ["none", "bunny", "bear", "cat", "antenna", "sprout", "flower", "curl", "horns"],
+  feet: ["stubby", "tiny", "long", "none"],
+  arms: ["nubs", "none"],
+  eyes: ["round", "sparkle", "dot", "happy", "sleepy"],
+  mouth: ["smile", "cat", "open", "small", "tooth"],
+  cheek: ["pink", "peach", "lilac", "none"],
+  pattern: ["none", "spots", "belly", "stripes", "patch", "socks", "tips"],
+};
+const GENE_N = {shape: "Body", top: "Head", feet: "Feet", arms: "Arms", eyes: "Eyes", mouth: "Mouth", cheek: "Cheeks", pattern: "Pattern"};
+const BODY_C = ["#f6efe2", "#ffd8c2", "#ffc9d8", "#f7a9b8", "#fff1a8", "#c9f0d6", "#c6e3ff", "#ddccff", "#f0c9f3", "#dcb89c", "#d9d9d9", "#ffb8a2", "#d2e3c0", "#b9ece9"];
+const MARK_C = ["#8a5a44", "#d4527a", "#4a5a9a", "#4f8a5b", "#e0a92e", "#8a5aa8", "#5a5a5a", "#ffffff", "#f08a3c", "#3f9aa8"];
+const EYE_C = ["ink", "#5a3a2a", "#2f4f9a", "#2f7a4a", "#9a2f4a", "#6a3aa0"];
+const CHEEK_C = {pink: "#f0889a", peach: "#ffa27a", lilac: "#c39bff"};
+const pick = (a, r) => a[Math.floor(r() * a.length) % a.length];
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgbHex = a => "#" + a.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+const mixC = (a, b, t) => { const A = hexRgb(a), B = hexRgb(b); return rgbHex(A.map((v, i) => v + (B[i] - v) * t)); };
+const shadeC = c => mixC(c, "#3a2a30", .26);
+function randGenes(r = Math.random){
+  const w = (opts, weights) => { let x = r() * weights.reduce((a, b) => a + b, 0); for (let i = 0; i < opts.length; i++){ x -= weights[i]; if (x < 0) return opts[i]; } return opts[0]; };
+  return {shape: pick(GENES.shape, r), top: pick(GENES.top, r), feet: w(GENES.feet, [5, 2, 2, 1]), arms: w(GENES.arms, [3, 1]),
+    eyes: w(GENES.eyes, [4, 3, 2, 2, 1]), mouth: w(GENES.mouth, [4, 3, 2, 2, 1]), cheek: w(GENES.cheek, [4, 2, 2, 1]), pattern: w(GENES.pattern, [3, 2, 2, 1, 1, 1, 1]),
+    c: pick(BODY_C, r), pc: pick(MARK_C, r), ec: w(EYE_C, [6, 1, 1, 1, 1, 1]), ps: Math.floor(r() * 1e6)};
+}
+function mixGenes(A, B, r = Math.random){
+  const g = {};
+  for (const k of Object.keys(GENES)){ const x = r(); g[k] = x < .45 ? A[k] : x < .9 ? B[k] : pick(GENES[k], r); }
+  const col = (a, b, pool) => { const x = r(); return x < .32 ? a : x < .64 ? b : x < .94 ? mixC(a, b, .5) : pick(pool, r); };
+  g.c = col(A.c, B.c, BODY_C); g.pc = col(A.pc, B.pc, MARK_C);
+  g.ec = r() < .5 ? A.ec : B.ec; if (r() < .06) g.ec = pick(EYE_C, r);
+  g.ps = r() < .5 ? A.ps : B.ps;
+  return g;
+}
+/* procedural body -> grid of chars: # outline, l fill, s shade, w shine, e eye, b cheek */
+const CG = new Map();
+function cMask(){ return new Set(); }
+function cEll(m, cx, cy, rx, ry){ for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if (((x + .5 - cx) / rx) ** 2 + ((y + .5 - cy) / ry) ** 2 <= 1) m.add(y * 32 + x); return m; }
+function cTri(m, cx, tip, h, slope = .7){ for (let y = Math.max(0, Math.floor(tip)); y < tip + h && y < 24; y++){ const hw = (y + 1 - tip) * slope; for (let x = 0; x < 24; x++) if (Math.abs(x + .5 - cx) <= hw) m.add(y * 32 + x); } return m; }
+function cLayer(g, m, {hl = true, shade = .35} = {}){
+  if (!m.size) return;
+  let x0 = 99, x1 = -1, y0 = 99, y1 = -1; m.forEach(k => { const x = k % 32, y = k >> 5; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+  const cx = (x0 + x1 + 1) / 2, cy = (y0 + y1 + 1) / 2, rx = (x1 - x0 + 1) / 2, ry = (y1 - y0 + 1) / 2;
+  m.forEach(k => { const x = k % 32, y = k >> 5; if (y < 0 || y > 23) return;
+    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !m.has((y + dy) * 32 + x + dx) || x + dx < 0 || x + dx > 23);
+    if (edge){ g[y][x] = "#"; return; }
+    const nx = (x + .5 - cx) / rx, ny = (y + .5 - cy) / ry, d = nx * .6 + ny;
+    g[y][x] = d > shade ? "s" : (hl && d < -.72 && nx < 0) ? "w" : "l"; });
+}
+function cPut(g, x, y, rows, onBody = false){ rows.forEach((r, j) => [...r].forEach((ch, i) => { const X = x + i, Y = y + j; if (ch === " " || Y < 0 || Y > 23 || X < 0 || X > 23) return; if (onBody && !"lsw".includes(g[Y][X])) return; g[Y][X] = ch; })); }
+const EYES = {round: ["we", "ee", "ee"], sparkle: ["we", "ee", "ew"], dot: ["  ", "ee", "ee"]};
+function creatureGrid(genes, stage, tier = 2){
+  const key = JSON.stringify([genes, stage, tier]); if (CG.has(key)) return CG.get(key);
+  const G = {...genes}, f = {baby: .64, child: .8, teen: .9, adult: 1}[stage] || 1;
+  if (stage === "baby"){ G.top = "curl"; G.arms = "none"; G.feet = G.feet === "none" ? "none" : "tiny"; }
+  if (stage === "adult" && tier === 4) G.top = "fringe";
+  if (stage === "adult" && tier === 5){ G.eyes = "sleepy"; G.mouth = "tooth"; }
+  const dims = {round: [9.5, 7.6], tall: [8, 8.8], wide: [11, 6.4], pear: [10, 7.8], bean: [10, 8.4], drop: [9, 7.8]}[G.shape] || [9.5, 7.6];
+  let rx = dims[0] * f, ry = dims[1] * f;
+  const fh = ({none: 0, bunny: 8, bear: 2, cat: 3, antenna: 4, sprout: 7, flower: 9, curl: 3, horns: 3, fringe: 2})[G.top] * (G.top === "sprout" || G.top === "flower" ? 1 : f);
+  const bottom = G.feet === "none" ? 23 : G.feet === "long" ? 20.2 : 21.2;
+  let cy = bottom - ry; if (cy - ry < fh){ ry = Math.max(4.5, (bottom - fh) / 2); cy = bottom - ry; }
+  const top = cy - ry, g = Array.from({length: 24}, () => Array(24).fill("."));
+  const back = [], fore = [];
+  // head features behind the body
+  if (G.top === "bunny"){ const er = 5.2 * f; back.push(cEll(cMask(), 12 - 3.6 * f - .4, top - er * .55, 2.3 * f + .3, er), cEll(cMask(), 12 + 3.6 * f + .4, top - er * .55, 2.3 * f + .3, er)); }
+  if (G.top === "bear") back.push(cEll(cMask(), 12 - rx * .62, top + 1.6, 2.8 * f + .2, 2.8 * f + .2), cEll(cMask(), 12 + rx * .62, top + 1.6, 2.8 * f + .2, 2.8 * f + .2));
+  if (G.top === "cat") back.push(cTri(cMask(), 12 - rx * .55, top - 2.6 * f, 5 * f, .75), cTri(cMask(), 12 + rx * .55, top - 2.6 * f, 5 * f, .75));
+  if (G.top === "horns") back.push(cTri(cMask(), 12 - rx * .42, top - 2.6 * f, 4 * f, .45), cTri(cMask(), 12 + rx * .42, top - 2.6 * f, 4 * f, .45));
+  // feet
+  if (G.feet === "stubby") back.push(cEll(cMask(), 12 - 4 * f, bottom + .9, 2.8 * f + .2, 2.1));
+  if (G.feet === "stubby") back.push(cEll(cMask(), 12 + 4 * f, bottom + .9, 2.8 * f + .2, 2.1));
+  if (G.feet === "tiny") back.push(cEll(cMask(), 12 - 3 * f, bottom + .7, 1.9 * f + .3, 1.6), cEll(cMask(), 12 + 3 * f, bottom + .7, 1.9 * f + .3, 1.6));
+  if (G.feet === "long") back.push(cEll(cMask(), 12 - 3.4 * f, bottom + 1.6, 2 * f + .3, 2.9), cEll(cMask(), 12 + 3.4 * f, bottom + 1.6, 2 * f + .3, 2.9));
+  back.forEach(m => cLayer(g, m, {hl: false}));
+  // body
+  const B = cMask();
+  if (G.shape === "pear"){ cEll(B, 12, cy + ry * .28, rx, ry * .72); cEll(B, 12, cy - ry * .3, rx * .74, ry * .7); }
+  else if (G.shape === "drop"){ cEll(B, 12, cy + ry * .12, rx, ry * .88); cEll(B, 12, cy - ry * .62, rx * .42, ry * .4); }
+  else cEll(B, 12, cy, rx, ry);
+  cLayer(g, B);
+  // inner ear colour
+  if (G.top === "bunny") for (let y = 0; y < 24; y++) for (const x of [Math.round(12 - 3.6 * f - .9), Math.round(12 - 3.6 * f - .4) , Math.round(12 + 3.6 * f), Math.round(12 + 3.6 * f + .5)]) if (y < top + 1 && g[y][x] === "l") g[y][x] = "b";
+  if (G.top === "bear") [12 - rx * .62, 12 + rx * .62].forEach(cx => { const m = cEll(cMask(), cx, top + 1.6, 1.4 * f, 1.4 * f); m.forEach(k => { const x = k % 32, y = k >> 5; if (g[y][x] === "l" || g[y][x] === "s") g[y][x] = "b"; }); });
+  // face
+  const gap = Math.max(2, Math.round(rx * .32)), lx = 10 - gap, rxE = 12 + gap, ey = Math.round(cy - ry * .12) - 1;
+  if (G.eyes === "happy"){ cPut(g, lx - 1, ey + 1, [".ee.", "e..e"]); cPut(g, rxE - 1, ey + 1, [".ee.", "e..e"]); }
+  else if (G.eyes === "sleepy"){ cPut(g, lx - 1, ey + 2, ["eee"]); cPut(g, rxE, ey + 2, ["eee"]); }
+  else { const E = EYES[G.eyes] || EYES.round; cPut(g, lx, ey, E); cPut(g, rxE, ey, E); }
+  if (G.cheek !== "none"){ cPut(g, lx - 2, ey + 3, ["bbb"], true); cPut(g, rxE + 1, ey + 3, ["bbb"], true); }
+  const M = {smile: ["#..#", ".##."], cat: ["#.##.#", ".#..#."], open: [".##.", "#..#", ".##."], small: ["##"], tooth: ["####", ".#.."]}[G.mouth] || ["#..#", ".##."];
+  cPut(g, 12 - Math.floor(M[0].length / 2), ey + 4, M);
+  // arms
+  if (G.arms === "nubs"){ const ay = Math.round(cy + ry * .25); const row = g[ay]; if (row){ const l = row.indexOf("#"), r = row.lastIndexOf("#"); if (l > 1) cPut(g, l - 2, ay, ["##", "##"]); if (r > -1 && r < 22) cPut(g, r + 1, ay, ["##", "##"]); } }
+  // features in front / on top
+  const tY = Math.round(top);
+  if (G.top === "antenna"){ cPut(g, 8, tY - 4, ["#......#", ".#....#.", "..#..#..", "..#..#.."]); }
+  if (G.top === "sprout") cPut(g, 5, tY - 7, [".###......###.", "#sss#....#sss#", "#ssss#..#ssss#", ".#ssss##ssss#.", "..####..####..", "......##......", "......##......"]);
+  if (G.top === "flower") cPut(g, 8, tY - 9, ["...###...", "..#bbb#..", ".##bbb##.", "#bb#s#bb#", "#bb#s#bb#", ".##bbb##.", "..#bbb#..", "...###...", "....#...."]);
+  if (G.top === "curl") cPut(g, 11, tY - 3, ["..#", ".#.", "#..", ".#."]);
+  if (G.top === "fringe") cPut(g, 5, tY - 2, ["..#....#....#..", ".#s#..#s#..#s#.", "#sss##sss##sss#"]);
+  if (stage === "adult" && tier === 1){ cPut(g, 1, Math.max(0, tY), [".#.", "###", ".#."]); cPut(g, 20, Math.max(0, tY + 3), ["#"]); }
+  const rows = g.map(r => r.join(""));
+  CG.set(key, rows); return rows;
+}
+/* painter for any grid; genes add colour */
+function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {}){
+  const width = rows[0].length, out = [];
+  let x0 = 99, x1 = -1, y0 = 99, y1 = -1;
+  rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== ".") { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } }));
+  const W = x1 - x0 + 1, H = y1 - y0 + 1;
+  let spots = [];
+  if (genes && genes.pattern === "spots"){ let s = genes.ps || 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 4; i++) spots.push([x0 + W * (.2 + r() * .6), y0 + H * (.35 + r() * .5)]); }
+  const markAt = (x, y) => { if (!genes) return false; const u = (x - x0) / W, v = (y - y0) / H;
+    switch (genes.pattern){
+      case "spots": return spots.some(([sx, sy]) => (x + .5 - sx) ** 2 + (y + .5 - sy) ** 2 <= 2.2);
+      case "belly": return ((u - .5) / .26) ** 2 + ((v - .74) / .2) ** 2 <= 1;
+      case "stripes": return v < .55 && v > .12 && x % 3 === 0;
+      case "patch": return ((u - .3) / .17) ** 2 + ((v - .48) / .16) ** 2 <= 1;
+      case "socks": return v > .86;
+      case "tips": return v < .26;
+    } return false; };
+  const fills = {}, push = (fill, x, y, extra = "") => { (fills[fill + extra] = fills[fill + extra] || []).push([x, y]); };
+  rows.forEach((row, y) => { for (let x = 0; x < width; x++){ let c = row[x]; if (c === ".") continue;
+    if (sleep && c === "w") c = "l";
+    if (c === "e" && sleep){ if ((rows[y + 1] || "")[x] === "e"){ c = "l"; } else { push("ink", x, y); const one = row[x - 1] !== "e" && row[x + 1] !== "e" && row[x - 1] !== "w" && row[x + 1] !== "w"; if (one) push("ink", x + (x < width / 2 ? 1 : -1), y); continue; } }
+    if (!genes){ push(c === "l" ? "l" : c === "s" ? "s" : c === "b" ? "b" : c === "w" ? "w" : "ink", x, y); continue; }
+    if (c === "#") push("ink", x, y);
+    else if (c === "e") push(genes.ec === "ink" ? "ink" : genes.ec, x, y);
+    else if (c === "w") push("#ffffff", x, y);
+    else if (c === "b") push(CHEEK_C[genes.cheek] || "#f0889a", x, y);
+    else if (c === "l" || c === "s"){ const base = genes.pattern === "belly" && markAt(x, y) ? mixC(genes.c, "#ffffff", .55) : markAt(x, y) ? genes.pc : genes.c; push(c === "s" ? shadeC(base) : base, x, y); }
+  } });
+  const X = x => ox + (flip ? width - 1 - x : x);
+  return Object.entries(fills).map(([f, pts]) => {
+    const d = pts.map(([x, y]) => `M${X(x)} ${oy + y}h1v1h-1z`).join("");
+    if (f === "ink") return `<path d="${d}"/>`;
+    if (f === "l") return `<path d="${d}" fill-opacity=".07"/>`;
+    if (f === "s") return `<path d="${d}" fill-opacity=".24"/>`;
+    if (f === "b") return `<path d="${d}" class="pblush"/>`;
+    if (f === "w") return `<path d="${d}" class="pshine"/>`;
+    return `<path d="${d}" fill="${f}"/>`;
+  }).join("");
+}
+const P_TIER = {pip: 2, tuft: 2, sprout: 2, lump: 4, bloom: 1, fern: 2, pebble: 3, mossy: 4, grub: 5};
+function petGrid(P){
+  if (P.dead) return SPR.grave.split("\n");
+  if (P.stage === "egg") return SPR.egg.split("\n");
+  if (!P.genes) return SPR[P.form].split("\n");
+  return creatureGrid(P.genes, P.stage, P_TIER[P.form] || 2);
+}
+function petMini(P, cls = "petmini"){
+  const g = petGrid(P), w = g[0].length, h = g.length;
+  return `<svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" class="${cls}" aria-hidden="true">${paintGrid(g, 0, 0, {sleep: !!P.asleep, genes: P.dead ? null : P.genes})}</svg>`;
+}
+/* book: stored, partners, passed */
+const book = () => ((items.settings || {}).petBook || []);
+const saveBook = b => saveCfg({petBook: b});
+const bookGet = id => book().find(x => x.id === id);
+function toBook(P, status, extra = {}){
+  const e = {id: P.id || uid(), name: P.name || "", form: P.form, stage: P.stage, genes: P.genes, gen: P.gen || 1, parents: P.parents || [], status, at: Date.now(), ...extra};
+  return e;
+}
+function storePet(){
+  const P = petNow(); if (!P || P.dead || P.stage !== "adult") return;
+  const snap = {...P, id: P.id || uid()}, e = toBook(snap, "stored", {snap});
+  saveBook([...book().filter(x => x.id !== e.id), e]); del("pet"); toast(`${P.name || PET_FORMS[P.form]} is in your collection.`);
+}
+function e0id(P){ return P.id || (P.id = uid()); }
+function bringBack(id){
+  const P = pet(); if (P && !P.dead && P.stage !== "adult"){ toast("Raise your current pet to adulthood first, or store it when it's grown."); return; }
+  if (P && !P.dead) storePet();
+  const e = bookGet(id); if (!e || !e.snap) return;
+  const now = Date.now(), away = now - (e.snap.last || now);
+  const Q = {...e.snap, last: Math.floor(now / MIN) * MIN, lifeEnd: e.snap.lifeEnd ? e.snap.lifeEnd + away : null, call: null};
+  saveBook(book().filter(x => x.id !== id)); put("pet", Q);
+}
+const VNAMES = ["Mochi","Bun","Pudding","Tofu","Pebble","Sprig","Dumpling","Clover","Biscuit","Nori","Maple","Peach","Bean","Kiwi","Taro","Sesame","Juniper","Button","Fig","Pom"];
+function suitors(n = 3){ return Array.from({length: n}, () => ({id: uid(), name: pick(VNAMES, Math.random), form: pick(["bloom", "fern", "pebble"], Math.random), stage: "adult", genes: randGenes(), gen: 1, parents: [], status: "partner"})); }
+let petSuitors = null;
+function hatchFrom(A, B){
+  const cur = pet();
+  if (cur && !cur.dead){ if (cur.stage !== "adult"){ toast("Finish raising your current pet first."); return false; } storePet(); }
+  const b = book(); const add = []; [A, B].forEach(x => { if (!b.some(y => y.id === x.id)) add.push({...x, status: x.status === "partner" ? "partner" : x.status}); });
+  const Ab = A.genes || randGenes(), Bb = B.genes || randGenes();
+  const egg = newPet("", mixGenes(Ab, Bb), Math.max(A.gen || 1, B.gen || 1) + 1, [A.id, B.id]);
+  saveBook([...book(), ...add.filter(x => !book().some(y => y.id === x.id))]);
+  put("pet", egg); toast("An egg! It hatches in 5 minutes."); return true;
+}
+function pairSheet(aId){
+  const cur = pet(), A = aId === "current" ? {...cur, id: e0id(cur)} : bookGet(aId); if (!A) return;
+  if (aId === "current" && cur && !cur.id) put("pet", {...cur, id: A.id}, {silent: true});
+  petSuitors = petSuitors || suitors();
+  const mates = book().filter(x => x.status === "stored" && x.id !== A.id);
+  const card = (x, tag) => `<button type="button" class="pmate" data-mate="${x.id}" data-mate-src="${tag}">${petMini(x, "petmini big")}<span>${esc(x.name || PET_FORMS[x.form])}</span><small>${tag === "npc" ? "Visitor" : "Gen " + (x.gen || 1)}</small></button>`;
+  sheet(`Find a partner for ${A.name || PET_FORMS[A.form]}`, `
+    ${mates.length ? `<div class="fld"><span>Your collection</span><div class="pmates">${mates.map(x => card(x, "book")).join("")}</div></div>` : ""}
+    <div class="fld"><span>Visitors</span><div class="pmates">${petSuitors.map(x => card(x, "npc")).join("")}</div>
+    <button type="button" class="link" data-shuffle style="padding:6px 0">New visitors</button></div>
+    <div class="sub">The baby gets a mix of both parents' body, head, eyes, colors and markings, with a small chance of something new.</div>`, () => {}, null, "Close");
+  const S = $(".sheet");
+  S.querySelector("[data-shuffle]").onclick = () => { petSuitors = suitors(); $(".scrim")?.remove(); pairSheet(aId); };
+  S.querySelectorAll("[data-mate]").forEach(b => b.onclick = () => {
+    const B = b.dataset.mateSrc === "npc" ? petSuitors.find(x => x.id === b.dataset.mate) : bookGet(b.dataset.mate);
+    if (!B) return; $(".scrim")?.remove(); petSuitors = null; hatchFrom(A, B); });
+}
+function treeSheet(id){
+  const all_ = [...book()], cur = pet(); if (cur && cur.id) all_.push({...cur, status: "current"});
+  const get = i => all_.find(x => x.id === i);
+  const me = get(id); if (!me) return;
+  const node = x => x ? `<div class="tnode">${petMini(x, "petmini big")}<span>${esc(x.name || PET_FORMS[x.form] || "")}</span><small>${x.status === "partner" ? "Visitor" : "Gen " + (x.gen || 1)}</small></div>` : `<div class="tnode empty"><span>Unknown</span></div>`;
+  const ps = (me.parents || []).map(get), gps = ps.flatMap(p => p ? (p.parents || []).map(get) : []);
+  const kids = all_.filter(x => (x.parents || []).includes(id));
+  sheet("Family tree", `
+    ${gps.some(Boolean) ? `<div class="fld"><span>Grandparents</span><div class="trow">${gps.map(node).join("")}</div></div>` : ""}
+    ${ps.length ? `<div class="fld"><span>Parents</span><div class="trow">${ps.map(node).join("")}</div></div>` : ""}
+    <div class="fld"><span>${esc(me.name || PET_FORMS[me.form])}</span><div class="trow">${node(me)}</div></div>
+    ${kids.length ? `<div class="fld"><span>Children</span><div class="trow">${kids.map(node).join("")}</div></div>` : ""}
+    <div class="fld"><span>Genes</span><div class="sub">${Object.keys(GENE_N).map(k => `${GENE_N[k]}: ${me.genes ? me.genes[k] : "classic"}`).join(" · ")}</div>
+      ${me.genes ? `<div class="chips" style="margin-top:8px"><span class="swatch" style="--sw:${me.genes.c}"></span><span class="swatch" style="--sw:${me.genes.pc}"></span></div>` : ""}</div>`, () => {}, null, "Close");
+}
+function bookSheet(id){
+  const e = bookGet(id); if (!e) return;
+  sheet(e.name || PET_FORMS[e.form], `<div class="trow" style="justify-content:flex-start">${petMini(e, "petmini big")}<div class="sub">${esc(PET_FORMS[e.form] || "")} · Gen ${e.gen || 1}${e.status === "passed" ? " · " + esc(e.why || "Passed away") : ""}</div></div>
+    <div class="chips" style="margin-top:14px">
+      ${e.status === "stored" ? `<button type="button" class="btn" data-bk="raise">Raise this one</button><button type="button" class="btn" data-bk="pair">Find a partner</button>` : ""}
+      <button type="button" class="btn" data-bk="tree">Family tree</button>
+      <button type="button" class="btn danger" data-bk="rel">${e.status === "stored" ? "Release" : "Remove"}</button></div>`, () => {}, null, "Close");
+  const S = $(".sheet");
+  S.querySelectorAll("[data-bk]").forEach(b => b.onclick = () => { const a = b.dataset.bk; $(".scrim")?.remove();
+    if (a === "raise") bringBack(id); else if (a === "pair") pairSheet(id); else if (a === "tree") treeSheet(id);
+    else confirmSheet(e.status === "stored" ? "Release this pet?" : "Remove from the book?", "It leaves your collection for good. Family trees that include it will show it as unknown.", () => saveBook(book().filter(x => x.id !== id))); });
+}
+function collectionHtml(){
+  const b = book(), stored = b.filter(x => x.status === "stored"), passed = b.filter(x => x.status === "passed");
+  const cell = x => `<button class="pcell" data-book="${x.id}">${petMini(x, "petmini big")}<span>${esc(x.name || PET_FORMS[x.form])}</span><small>Gen ${x.gen || 1}</small></button>`;
+  return `${stored.length ? `<h2>Collection</h2><div class="pgrid">${stored.map(cell).join("")}</div>` : ""}
+    ${passed.length ? `<h2>Remembered</h2><div class="pgrid">${passed.map(cell).join("")}</div>` : ""}`;
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-book]"); if (b) bookSheet(b.dataset.book); });
 
 /* ---------- render ---------- */
 function render(){
