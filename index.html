@@ -2839,21 +2839,24 @@ function gemGrid(G, stage, tier, f){
   if (body === "crystal"){ top = bottom - H; rx = rw; ry = H / 2; cy = top + H / 2 + tip * .4; }
   else if (body === "cut"){ rx = 8.6 * f + .4; ry = Math.min(7.4 * f + .3, (bottom - spikesH - 1) / 2); cy = bottom - ry; top = cy - ry; }
   else { rx = 9.4 * f + .4; ry = Math.min(7 * f + .3, (bottom - spikesH - 1) / 2.1); cy = bottom - ry; top = cy - ry * 1.05; }
-  if (v === "spikes") [[12 - 4.4 * f, 5 * f], [12, 7 * f], [12 + 4.4 * f, 5 * f]].forEach(([cx, h]) => {
+  if (v === "spikes") [[12 - 4.6 * f, 4.2 * f], [12 + .6, 7 * f], [12 + 4.6 * f, 3.2 * f]].forEach(([cx, h]) => {
     const t = top + 1.6 - h, w = 2.1 * f + .5; cFlat(g, cPoly(cMask(), [[cx, t], [cx + w, t + h * .5], [cx + w, top + 3], [cx - w, top + 3], [cx - w, t + h * .5]]), x => x + .5 < cx ? "h" : "s"); });
   if (body === "crystal"){
+    const sx = 12 - rw - 1.6 * f, st = top + H * .38, side = cPoly(cMask(), [[sx - .6, st], [12 - rw * .2, st + H * .2], [12 - rw * .2, bottom - .6], [sx + .8, bottom - .6], [sx - 1.4 * f, st + H * .25]]);
+    cFlat(g, side, x => x + .5 < sx ? "h" : "s");
     const m = cPoly(cMask(), [[12.9, top], [12 + rw, top + tip * .8], [12 + rw, bottom - .6], [12 + rw - 1.4, bottom], [12 - rw + 1.4, bottom], [12 - rw, bottom - .6], [12 - rw, top + tip]]);
     cFlat(g, m, (x, y) => { const dx = x + .5 - 12, tipZone = y + .5 < top + tip + Math.abs(dx) * .1 + .8;
       if (tipZone) return dx < 0 ? "h" : "l"; if (Math.abs(dx) < rw * .38) return "h"; return dx < 0 ? "l" : "s"; });
   } else if (body === "cut"){
-    const c = 3 * f + .3;
-    const m = cPoly(cMask(), [[12 - rx + c, top], [12 + rx - c, top], [12 + rx, top + c], [12 + rx, cy + ry - c], [12 + rx - c, cy + ry], [12 - rx + c, cy + ry], [12 - rx, cy + ry - c], [12 - rx, top + c]]);
-    cFlat(g, m, (x, y) => { const dx = (x + .5 - 12) / rx, dy = (y + .5 - cy) / ry;
-      if (Math.abs(dx) < .58 && Math.abs(dy) < .5) return "h"; return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "l" : "d") : (dx < 0 ? "l" : "s"); });
+    const c1 = 3.8 * f + .3, c2 = 1.6 * f + .3, c3 = 3 * f + .3, c4 = 2 * f + .3;
+    const m = cPoly(cMask(), [[12 - rx + c1, top], [12 + rx - c2, top + .4], [12 + rx, top + c2 + .4], [12 + rx, cy + ry - c3], [12 + rx - c3, cy + ry], [12 - rx + c4, cy + ry], [12 - rx, cy + ry - c4], [12 - rx, top + c1]]);
+    cFlat(g, m, (x, y) => { const dx = (x + .5 - 11.2) / rx, dy = (y + .5 - cy + .6) / ry;
+      if (Math.abs(dx) < .52 && Math.abs(dy) < .46) return "h"; return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "l" : "d") : (dx < 0 ? "l" : "s"); });
     g[Math.round(cy - ry * .32)][Math.round(12 - rx * .32)] = "w";
   } else {
     const m = cEll(cMask(), 12, cy, rx, ry); cEll(m, 12 - rx * .35, cy - ry * .45, rx * .55, ry * .6); cEll(m, 12 + rx * .4, cy + ry * .1, rx * .62, ry * .85);
     cLayer(g, m);
+    const kx = Math.round(12 + rx * .5), ky = Math.round(cy - ry * .55); [[0, 0], [1, 1], [1, 2], [2, 3]].forEach(([dx, dy]) => { if ("lhs".includes((g[ky + dy] || [])[kx + dx])) g[ky + dy][kx + dx] = "#"; });
   }
   const inBody = (x, y) => "lhsdw".includes((g[y] || [])[x]);
 
@@ -2873,22 +2876,28 @@ function plantGrid(G, stage, tier, f){
   if (body !== "pot" && G.feet !== "none") feetOn(g, {...G, feet: G.feet === "long" ? "stubby" : G.feet}, f, bottom);
   if (body === "cactus"){
     const rw = 6.2 * f + .5, H = Math.min(16 * f + 1, bottom - capH - .5); top = bottom - H; rx = rw; ry = H / 2; cy = top + H / 2;
+    if (stage !== "baby"){ const ax = 12 - rw - 1.9 * f, ay = top + H * .3, arm = cEll(cMask(), ax, ay + 1.6 * f, 1.7 * f + .3, 3.2 * f);
+      for (let y = Math.round(ay + 3 * f); y < Math.round(ay + 5.2 * f); y++) for (let x = Math.round(ax - 1); x < Math.round(12 - rw + 1); x++) arm.add(y * 32 + x);
+      cLayer(g, arm, {hl: false}); cLayer(g, cEll(cMask(), 12 + rw + .5, top + H * .66, 1.5 * f + .2, 1.4 * f + .2), {hl: false}); }
     const m = cEll(cMask(), 12, top + rw, rw, rw); for (let y = Math.ceil(top + rw); y < bottom - 1; y++) for (let x = Math.round(12 - rw); x < Math.round(12 + rw); x++) m.add(y * 32 + x);
     cEll(m, 12, bottom - 1.6, rw, 1.6); cLayer(g, m);
     for (let y = Math.round(top + 3); y < bottom - 2; y++) for (const x of [Math.round(12 - rw * .45), Math.round(12 + rw * .45) - 1]) if (g[y][x] === "l" || g[y][x] === "s") g[y][x] = "s";
   } else if (body === "pot"){
     rx = 8.4 * f + .4; ry = 6.4 * f + .3; const potH = 6 * f + 1, potTop = bottom - potH; cy = potTop - ry * .55; top = cy - ry;
     cLayer(g, cEll(cMask(), 12, cy, rx, ry));
-    const pw = rx * .95, m = cPoly(cMask(), [[12 - pw, potTop], [12 + pw, potTop], [12 + pw * .78, bottom], [12 - pw * .78, bottom]]);
-    const rim = cPoly(cMask(), [[12 - pw - 1, potTop - 1], [12 + pw + 1, potTop - 1], [12 + pw + 1, potTop + 1.6], [12 - pw - 1, potTop + 1.6]]);
+    const pw = rx * .95, m = cPoly(cMask(), [[12 - pw, potTop], [12 + pw, potTop], [12 + pw * .78 + .6, bottom], [12 - pw * .78 + .6, bottom]]);
+    const rim = cPoly(cMask(), [[12 - pw - 1, potTop - 1.4], [12 + pw + 1, potTop - .6], [12 + pw + 1, potTop + 1.8], [12 - pw - 1, potTop + 1.2]]);
+    const chip = [Math.round(12 + pw * .2), Math.round(potTop + 3 * f)];
     cFlat(g, m, (x) => x + .5 > 12 + pw * .35 ? "q" : "p"); cFlat(g, rim, (x) => x + .5 > 12 + pw * .5 ? "q" : "p");
+    if (g[chip[1]] && g[chip[1]][chip[0]] !== "#") { g[chip[1]][chip[0]] = "#"; if (g[chip[1] + 1]) g[chip[1] + 1][chip[0] + 1] = "#"; }
   } else {
     rx = 9 * f + .4; ry = 7.2 * f + .3; cy = bottom - ry; top = cy - ry * 1.15;
-    const m = cEll(cMask(), 12, cy, rx, ry); cEll(m, 12, cy - ry * .78, rx * .42, ry * .5); cLayer(g, m);
+    if (stage !== "baby"){ const root = cMask(); [[.62, .78, 1.6], [.88, .92, 1.25], [1.08, .78, 1]].forEach(([u, w, r]) => cEll(root, 12 + rx * u, cy + ry * w, r * f + .2, r * f + .2)); cLayer(g, root, {hl: false}); }
+    const m = cEll(cMask(), 11.6, cy, rx, ry); cEll(m, 12.4, cy - ry * .78, rx * .42, ry * .5); cLayer(g, m);
   }
   const tY = Math.round(top), inBody = (x, y) => "lhsdw".includes((g[y] || [])[x]);
   if (v === "sprout") cPut(g, 4, tY - 7, [".####.........", "#vvvv#........", "#vvvvv#...###.", ".#xvvvx#.#vvv#", "..#####.#xvvx#", ".......##.###.", ".......##....."]);
-  if (v === "bloom") cPut(g, 8, tY - 8, ["...###...", "..#ppp#..", ".##ppp##.", "#pp#y#pp#", "#pp#y#pp#", ".##ppp##.", "..#ppp#..", "...###...", "....#...."]);
+  if (v === "bloom") cPut(g, 9, tY - 8, ["...###...", "..#ppp#..", ".##ppp##.", "#pp#y#pp#", "#pp#y#pp#", ".##ppp##.", "..#ppp#..", "...###.##", "...#..#vv#", "...#...##"]);
   if (v === "spiky"){ g.forEach((row, y) => row.forEach((c, x) => { if (c === "#" && y < cy + ry * .5 && (x * 7 + y * 3) % 5 === 0){ const ox = x < 12 ? -1 : 1; if (g[y][x + ox] === ".") g[y][x + ox] = "#"; } }));
     cPut(g, 10, tY - 2, [".pp.", "pyyp", ".pp."]); }
   if (v === "mushroom"){ const cr = rx + 2.2, m = cEll(cMask(), 12.8, top + 2.4, cr, 4.6 * f + .8), keep = new Set(); m.forEach(k => { if ((k >> 5) <= top + 2.6) keep.add(k); });
@@ -3007,7 +3016,7 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
   rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== ".") { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } }));
   const W = x1 - x0 + 1, H = y1 - y0 + 1;
   let spots = [];
-  const COL = genes ? colorsOf(genes) : null, crit = genes && ["critter", "animal"].includes(genes.kind || "critter");
+  const COL = genes ? colorsOf(genes) : null, crit = !!genes;
   if (genes && crit && genes.pattern === "spots"){ let s = genes.ps || 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 4; i++){ const side = i % 2 ? 1 : -1; spots.push(i < 2 ? [x0 + W * (.5 + side * (.3 + r() * .1)), y0 + H * (.45 + r() * .2)] : [x0 + W * (.5 + side * (.08 + r() * .2)), y0 + H * (.8 + r() * .08)]); } }
   const markAt = (x, y) => { if (!genes || !crit) return false; const u = (x - x0) / W, v = (y - y0) / H;
     switch (genes.pattern){
