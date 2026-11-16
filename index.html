@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Mono:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500&family=Space+Grotesk:wght@400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Mono:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500&family=Space+Grotesk:wght@400;500&family=Space+Mono:wght@400;700&family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&display=swap" rel="stylesheet">
 <style>
 /* ======== theme tokens ======== */
 :root, html[data-theme="paper"]{
@@ -83,6 +83,61 @@ html[data-theme="handheld"]{
   --work:#2d5ca8; --life:#a0501a; --warn:#8f2f0e; --warn-soft:#e2c3ad;
   --sheet-bg:#30362f; --field-bg:#c6d0b3; --field-border:#121512; --toast-bg:#121512; --toast-ink:#c6d0b3;
 }
+
+html[data-theme="ledger"]{
+  --shell:#f6f4ee; --shell-2:#ebe8df; --shell-3:#dfe3ea; --shell-ink:#1c2742; --shell-muted:#4d5873;
+  --page-img:repeating-linear-gradient(0deg, rgba(60,100,170,.13) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(60,100,170,.13) 0 1px, transparent 1px 24px);
+  --lcd:#fffefa; --lcd-2:#f1f3f7; --lcd-3:#e2e7ef; --ink:#1c2742; --muted:#4d5873; --line:rgba(28,39,66,.14);
+  --bezel:#c5cfdf; --card-bw:1px; --card-shadow:inset 3px 0 0 #d9534f, 0 1px 0 rgba(28,39,66,.06); --card-img:none; --radius:4px;
+  --amber:#1c2742; --amber-ink:#fffefa; --amber-low:transparent; --accent:#1c2742;
+  --key-bg:#e6eaf1; --key-ink:#1c2742; --key-border:transparent; --key-shadow:none; --key-radius:6px;
+  --chip-bg:#fffefa; --chip-border:#c5cfdf; --chip-ink:#3d4865; --chip-radius:6px;
+  --nav-bg:rgba(246,244,238,.96); --nav-border:#c5cfdf; --nav-on:#1c2742; --nav-on-bg:transparent;
+  --head:"Fraunces", Georgia, serif; --head-size:32px; --head-weight:500; --head-case:none; --head-track:-.01em;
+  --pix:"IBM Plex Mono", ui-monospace, monospace; --mono:"IBM Plex Sans", system-ui, sans-serif;
+  --label-track:.12em; --label-size:11px;
+  --check-radius:3px; --cell-radius:3px; --tank-radius:6px; --tank-bw:1.5px;
+  --work:#2a78d6; --life:#c4471f; --warn:#a3261b; --warn-soft:#f6d9d4;
+  --sheet-bg:#fbfaf6; --field-bg:#fffefa; --field-border:#c5cfdf; --toast-bg:#1c2742; --toast-ink:#fffefa;
+}
+html[data-theme="night"]{
+  --shell:#16171a; --shell-2:#202126; --shell-3:#2a2c32; --shell-ink:#ece6da; --shell-muted:#a8a296;
+  --page-img:var(--grain);
+  --lcd:#1e1f23; --lcd-2:#26282d; --lcd-3:#33353b; --ink:#ece6da; --muted:#a8a296; --line:rgba(236,230,218,.12);
+  --bezel:#2f3137; --card-bw:1px; --card-shadow:0 1px 0 rgba(0,0,0,.4); --card-img:var(--grain); --radius:10px;
+  --amber:#e3a857; --amber-ink:#1a1408; --amber-low:transparent; --accent:#e3a857;
+  --key-bg:#2a2c32; --key-ink:#ece6da; --key-border:transparent; --key-shadow:none; --key-radius:999px;
+  --chip-bg:transparent; --chip-border:#3a3c43; --chip-ink:#c9c3b6; --chip-radius:999px;
+  --nav-bg:rgba(22,23,26,.96); --nav-border:#2a2c32; --nav-on:#e3a857; --nav-on-bg:transparent;
+  --head:"Zen Kaku Gothic New", system-ui, sans-serif; --head-size:30px; --head-weight:500; --head-case:none; --head-track:.02em;
+  --pix:"DM Mono", ui-monospace, monospace; --mono:"Zen Kaku Gothic New", system-ui, sans-serif;
+  --label-track:.2em; --label-size:11px;
+  --check-radius:4px; --cell-radius:999px; --tank-radius:999px; --tank-bw:1.5px;
+  --work:#6aa6ef; --life:#f0905c; --warn:#ff9b85; --warn-soft:#3a2420;
+  --sheet-bg:#1e1f23; --field-bg:#26282d; --field-border:#3a3c43; --toast-bg:#ece6da; --toast-ink:#16171a;
+}
+html[data-theme="riso"]{
+  --shell:#f3eee4; --shell-2:#ebe4d6; --shell-3:#e2d9c8; --shell-ink:#22307a; --shell-muted:#4b5596;
+  --page-img:var(--speckle), var(--grain);
+  --lcd:#fbf8f1; --lcd-2:#f1ebdf; --lcd-3:#e6dfd0; --ink:#22307a; --muted:#4b5596; --line:rgba(34,48,122,.18);
+  --bezel:#22307a; --card-bw:2px; --card-shadow:4px 4px 0 #f4a6bd; --card-img:var(--grain); --radius:12px;
+  --amber:#c22a5d; --amber-ink:#ffffff; --amber-low:#22307a; --accent:#22307a;
+  --key-bg:#fbf8f1; --key-ink:#22307a; --key-border:#22307a; --key-shadow:2px 2px 0 #22307a; --key-radius:8px;
+  --chip-bg:#fbf8f1; --chip-border:#22307a; --chip-ink:#22307a; --chip-radius:999px;
+  --nav-bg:rgba(243,238,228,.96); --nav-border:#22307a; --nav-on:#c22a5d; --nav-on-bg:transparent;
+  --head:"Bricolage Grotesque", system-ui, sans-serif; --head-size:34px; --head-weight:700; --head-case:none; --head-track:-.02em;
+  --pix:"Space Mono", ui-monospace, monospace; --mono:"Bricolage Grotesque", system-ui, sans-serif;
+  --label-track:.08em; --label-size:11px;
+  --check-radius:5px; --cell-radius:4px; --tank-radius:8px; --tank-bw:2px;
+  --work:#2a6fd6; --life:#c22a5d; --warn:#b3203f; --warn-soft:#f7d3dd;
+  --sheet-bg:#f3eee4; --field-bg:#fbf8f1; --field-border:#22307a; --toast-bg:#22307a; --toast-ink:#fbf8f1;
+}
+html[data-theme="riso"] .btn.pri{box-shadow:2px 2px 0 #22307a!important}
+html[data-theme="riso"] .btn:active{box-shadow:none}
+html[data-theme="night"] .card .chip.on,html[data-theme="night"] .bcard .chip.on{color:var(--lcd)}
+html[data-theme="night"] .day.sel{color:var(--lcd)}
+html[data-theme="night"] .switch:checked::after{background:var(--lcd)}
+html[data-theme="ledger"] h1{font-style:italic}
 :root{
   --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)' opacity='.13'/></svg>");
   --speckle:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='s'><feTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .32  0 0 0 0 .22  0 0 0 0 .12  1.6 0 0 0 -.62'/><feComponentTransfer><feFuncA type='discrete' tableValues='0 0 0 0 .45 .85 .95'/></feComponentTransfer></filter><rect width='100%25' height='100%25' filter='url(%23s)'/></svg>");
@@ -402,6 +457,9 @@ const THEMES = [
   {k:"paper", n:"Paper", bg:"#f3f0e8", card:"#f8f6f0", ink:"#111111", bd:"#d9d4c7", meta:"#f3f0e8"},
   {k:"kraft", n:"Kraft", bg:"#d8c6a6", card:"rgba(250,242,226,.35)", ink:"#2a1f15", bd:"rgba(42,31,21,.3)", meta:"#d8c6a6", speck:true},
   {k:"sage", n:"Sage", bg:"#e8eee2", card:"transparent", ink:"#1d201c", bd:"#1d201c", meta:"#e8eee2"},
+  {k:"ledger", n:"Ledger", bg:"#f6f4ee", card:"#fffefa", ink:"#1c2742", bd:"#c5cfdf", meta:"#f6f4ee"},
+  {k:"night", n:"Night", bg:"#16171a", card:"#1e1f23", ink:"#e3a857", bd:"#2f3137", meta:"#16171a"},
+  {k:"riso", n:"Riso", bg:"#f3eee4", card:"#fbf8f1", ink:"#c22a5d", bd:"#22307a", meta:"#f3eee4", speck:true},
   {k:"handheld", n:"Handheld", bg:"#272c28", card:"#c6d0b3", ink:"#e9a53a", bd:"#121512", meta:"#272c28"},
 ];
 function applyTheme(k){
@@ -1627,7 +1685,7 @@ function viewSettings(){
   return `<div class="kicker">Make it yours</div><h1>Settings</h1>
 
   <h2>Style</h2>
-  <div class="themes">${THEMES.map(t => `<button type="button" class="th ${t.k===cur?"on":""}" data-theme-pick="${t.k}"><span class="sw" style="background-color:${t.bg};background-image:${t.speck?"var(--speckle),":""}var(--grain)"><em style="background:${t.ink}"></em><b style="background:${t.card};border:1.5px solid ${t.bd}"></b></span><span class="nm">${t.n}</span></button>`).join("")}</div>
+  <div class="themes">${THEMES.map(t => `<button type="button" class="th ${t.k===cur?"on":""}" data-theme-pick="${t.k}"><span class="sw" style="background-color:${t.bg};background-image:${t.k==="ledger"?"repeating-linear-gradient(0deg, rgba(60,100,170,.18) 0 1px, transparent 1px 10px), repeating-linear-gradient(90deg, rgba(60,100,170,.18) 0 1px, transparent 1px 10px)":(t.speck?"var(--speckle),":"")+"var(--grain)"}"><em style="background:${t.ink}"></em><b style="background:${t.card};border:1.5px solid ${t.bd}"></b></span><span class="nm">${t.n}</span></button>`).join("")}</div>
 
   <h2>Theme</h2>
   ${kitPanel()}
