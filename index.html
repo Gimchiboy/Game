@@ -397,7 +397,7 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .gtiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
 .gtile{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:10px 10px 8px;text-align:left;min-width:0;
   background-color:var(--lcd);background-image:var(--card-img);color:var(--ink);border:var(--card-bw) solid var(--bezel);border-radius:calc(var(--radius) * .75);box-shadow:var(--card-shadow)}
-.gtile .gw{font:500 13px/1.2 var(--pix);letter-spacing:calc(var(--label-track) * .3);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gtile .gw{font:500 13px/1.2 var(--pix);letter-spacing:calc(var(--label-track) * .3);text-transform:uppercase;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;flex:1 0 auto}
 .gtile .gbar{margin:0;height:5px}
 .gtile .gp{font-size:11px;color:var(--muted)}
 
@@ -1166,7 +1166,7 @@ function dueLine(g){
   }
   return s;
 }
-const shortName = g => (g.short && g.short.trim()) || (g.title || "").trim().split(/\s+/)[0] || "Goal";
+const shortName = g => (g.title || "").trim() || "Goal";
 const activeGoals = () => all("goal").filter(g => !g.archived).sort(byOrder((a, b) => (a.created || 0) - (b.created || 0)));
 function goalBar(g){ return `<div class="gbar" style="--cc:${catColor(g)}"><i style="width:${Math.round(goalProg(g) * 100)}%"></i></div>`; }
 function goalAction(g){
@@ -1260,8 +1260,7 @@ function goalSheet(id){
   sheet(id ? "Edit goal" : "New goal", `
     ${id ? "" : `<div class="fld"><span>Start from</span><div class="chips" style="margin-top:0">
       <button type="button" class="chip" data-preset="money">Money</button><button type="button" class="chip" data-preset="reel">Reel</button><button type="button" class="chip" data-preset="steps">Milestones</button></div></div>`}
-    <label class="fld"><span>Goal</span><input name="title" value="${esc(g.title)}" required placeholder="What do you want?"></label>
-    <label class="fld"><span>One word for Today</span><input name="short" value="${esc(g.short||"")}" maxlength="14" placeholder="Taken from the goal if blank"></label>
+    <label class="fld"><span>Name</span><input name="title" value="${esc(g.title)}" required></label>
     <div class="fld"><span>Category & tags</span>${catPicker(catOf(g), extraIds(g))}</div>
     <label class="fld"><span>Type</span><select name="type">${Object.entries(GTYPES).map(([k, l]) => `<option value="${k}" ${g.type===k?"selected":""}>${l}</option>`).join("")}</select></label>
     <div class="two g-num"><label class="fld g-start"><span>Starting at</span><input name="start" type="number" step="any" inputmode="decimal" value="${g.start ?? ""}"></label>
@@ -1273,7 +1272,7 @@ function goalSheet(id){
     f => {
       const title = f.title.value.trim(); if (!title) return "Name your goal.";
       const type = f.type.value, num = x => x === "" ? null : Number(x);
-      const body = {title, short: f.short.value.trim().split(/\s+/)[0] || "", type, cat: f.cat.value, tags: f.tags.value.split(",").filter(Boolean), why: f.why.value.trim(), unit: f.unit.value.trim(),
+      const body = {title, short: "", type, cat: f.cat.value, tags: f.tags.value.split(",").filter(Boolean), why: f.why.value.trim(), unit: f.unit.value.trim(),
         due: (type === "value" || type === "sum" ? f.due.value : f.due2.value) || null};
       if (type === "value"){ body.start = num(f.start.value); body.target = num(f.target.value); if (body.start == null || body.target == null || isNaN(body.start) || isNaN(body.target)) return "Enter where you're starting and your target."; }
       if (type === "sum"){ body.target = num(f.target.value); if (!(body.target > 0)) return "Enter the total you're aiming for."; if (!body.unit) body.unit = "$"; }
