@@ -395,6 +395,7 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 details > summary{list-style:none}details > summary::-webkit-details-marker{display:none}
 .rp-seg{display:flex}.rp-seg button{flex:1}
 .rpo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0;text-transform:none;letter-spacing:0;font:inherit}.rpo input[type=radio]{width:18px;height:18px;margin:0;flex:none}.rpo .num{width:70px;flex:none}.rpo .sel{flex:1 1 34%;min-width:110px;max-width:none;width:auto}.rpo > span{white-space:nowrap}.rp-y{display:flex;align-items:center;gap:8px;flex:1 1 40%}
+.row.planned{opacity:.78}.row.planned .t .tag{font-size:10px}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
 
@@ -1755,8 +1756,12 @@ function viewFoodApp(){
     ${r ? `<div class="gbar big-bar" style="--cc:var(--ink)"><i style="width:${Math.min(100, Math.round(tot.kcal / r.target * 100))}%"></i></div>` : `<div class="statline">Set your targets in the Targets menu to see what's left.</div>`}
     <div style="margin-top:12px;display:grid;gap:10px">${macroBar("Protein", tot.p, r && r.proG, "g")}${macroBar("Carbs", tot.c, r && r.carbG, "g")}${macroBar("Fat", tot.f, r && r.fatG, "g")}</div>
   </div>
-  ${[...foodMeals(), {id: "", name: foodMeals().length ? "No meal" : "Logged"}].filter(m => m.id || !foodMeals().length || es.some(e => !hasMeal(e.meal))).map(m => { const list = es.filter(e => m.id ? e.meal === m.id : !hasMeal(e.meal)); const st = sumEats(list);
+  ${(() => { const pend = plannedFor(d).filter(r => !eatenRepeat(d, r.id)); return pend.length ? `<div class="sub" style="margin-top:14px">${pend.length} planned ${pend.length === 1 ? "food" : "foods"} to confirm. Tap the circle once you've eaten it.</div>` : ""; })()}
+  ${[...foodMeals(), {id: "", name: foodMeals().length ? "No meal" : "Logged"}].filter(m => m.id || !foodMeals().length || es.some(e => !hasMeal(e.meal)) || plannedFor(d).some(r => !hasMeal(r.meal) && !eatenRepeat(d, r.id))).map(m => { const list = es.filter(e => m.id ? e.meal === m.id : !hasMeal(e.meal)); const st = sumEats(list);
+    const pend = plannedFor(d).filter(r => !eatenRepeat(d, r.id) && (m.id ? r.meal === m.id : !hasMeal(r.meal)));
+    const pendHtml = pend.map(r => `<label class="row planned"><input type="checkbox" class="chk" data-plan="${r.id}" data-plan-day="${d}" aria-label="Confirm ${esc(r.name)}"><div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""} <span class="tag">Planned</span></div><div class="m">${r0((+r.kcal || 0) * (r.qty || 1))} cal · P ${r0((+r.p || 0) * (r.qty || 1))} · C ${r0((+r.c || 0) * (r.qty || 1))} · F ${r0((+r.f || 0) * (r.qty || 1))}</div></div></label>`).join("");
     return `<h2>${esc(m.name)}<span class="sp"></span>${list.length ? `<span class="sub" style="font-family:var(--sans);text-transform:none;letter-spacing:0">${r0(st.kcal)} cal</span>` : ""}<button class="link" data-food-add="${esc(m.id || "none")}">+ Add</button></h2>
+    ${pendHtml ? `<div class="card" style="margin-bottom:8px">${pendHtml}</div>` : ""}
     ${list.length ? `<div class="card" data-reorder="eats:${d}">${list.map(e => `<div class="row" data-oid="${esc(e.id)}">${list.length > 1 ? GRIP : ""}<div class="grow tap" data-food-edit="${esc(e.id)}"><div class="t">${esc(e.name)}${(+e.qty || 1) !== 1 ? ` <span class="sub">× ${e.qty}</span>` : ""}${e.repeatId ? ` <span class="sub">↻</span>` : ""}</div><div class="m">${r0(e.kcal * (e.qty || 1))} cal · P ${r0(e.p * (e.qty || 1))} · C ${r0(e.c * (e.qty || 1))} · F ${r0(e.f * (e.qty || 1))}</div></div><button class="ghost" data-food-del="${esc(e.id)}" aria-label="Remove">✕</button></div>`).join("")}</div>` : ""}`; }).join("")}`;
 }
 function foodEntrySheet(meal, editId){
@@ -2856,7 +2861,7 @@ function gemGrid(G, stage, tier, f){
   } else {
     const m = cEll(cMask(), 12, cy, rx, ry); cEll(m, 12 - rx * .35, cy - ry * .45, rx * .55, ry * .6); cEll(m, 12 + rx * .4, cy + ry * .1, rx * .62, ry * .85);
     cLayer(g, m);
-    const kx = Math.round(12 + rx * .5), ky = Math.round(cy - ry * .55); [[0, 0], [1, 1], [1, 2], [2, 3]].forEach(([dx, dy]) => { if ("lhs".includes((g[ky + dy] || [])[kx + dx])) g[ky + dy][kx + dx] = "#"; });
+
   }
   const inBody = (x, y) => "lhsdw".includes((g[y] || [])[x]);
 
@@ -2889,7 +2894,7 @@ function plantGrid(G, stage, tier, f){
     const rim = cPoly(cMask(), [[12 - pw - 1, potTop - 1.4], [12 + pw + 1, potTop - .6], [12 + pw + 1, potTop + 1.8], [12 - pw - 1, potTop + 1.2]]);
     const chip = [Math.round(12 + pw * .2), Math.round(potTop + 3 * f)];
     cFlat(g, m, (x) => x + .5 > 12 + pw * .35 ? "q" : "p"); cFlat(g, rim, (x) => x + .5 > 12 + pw * .5 ? "q" : "p");
-    if (g[chip[1]] && g[chip[1]][chip[0]] !== "#") { g[chip[1]][chip[0]] = "#"; if (g[chip[1] + 1]) g[chip[1] + 1][chip[0] + 1] = "#"; }
+    void chip;
   } else {
     rx = 9 * f + .4; ry = 7.2 * f + .3; cy = bottom - ry; top = cy - ry * 1.15;
     if (stage !== "baby"){ const root = cMask(); [[.62, .78, 1.6], [.88, .92, 1.25], [1.08, .78, 1]].forEach(([u, w, r]) => cEll(root, 12 + rx * u, cy + ry * w, r * f + .2, r * f + .2)); cLayer(g, root, {hl: false}); }
@@ -3018,11 +3023,12 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
   let spots = [];
   const COL = genes ? colorsOf(genes) : null, crit = !!genes;
   if (genes && crit && genes.pattern === "spots"){ let s = genes.ps || 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 4; i++){ const side = i % 2 ? 1 : -1; spots.push(i < 2 ? [x0 + W * (.5 + side * (.3 + r() * .1)), y0 + H * (.45 + r() * .2)] : [x0 + W * (.5 + side * (.08 + r() * .2)), y0 + H * (.8 + r() * .08)]); } }
+  const MARKS = {plant: ["spots", "belly"], gem: ["spots", "tips"]}, pat = genes ? ((MARKS[genes.kind] && !MARKS[genes.kind].includes(genes.pattern)) ? "none" : genes.pattern) : "none";
   const markAt = (x, y) => { if (!genes || !crit) return false; const u = (x - x0) / W, v = (y - y0) / H;
-    switch (genes.pattern){
-      case "spots": return spots.some(([sx, sy]) => (x + .5 - sx) ** 2 + (y + .5 - sy) ** 2 <= 2.2);
+    switch (pat){
+      case "spots": return spots.some(([sx, sy]) => (x + .5 - sx) ** 2 + (y + .5 - sy) ** 2 <= 1.3);
       case "belly": return ((u - .5) / .26) ** 2 + ((v - .74) / .2) ** 2 <= 1;
-      case "stripes": return v < .55 && v > .12 && x % 3 === 0;
+      case "stripes": return v < .34 && v > .06 && (x - x0) % 3 === 1;
       case "patch": return ((u - .3) / .17) ** 2 + ((v - .48) / .16) ** 2 <= 1;
       case "socks": return v > .86;
       case "tips": return v < .26;
@@ -3035,7 +3041,7 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
     if (c === "#") push(mixC(COL.c, "#2a1f2c", .8), x, y);
     else if (c === "e") push(genes.ec === "ink" ? "#241a26" : genes.ec, x, y);
     else if (c === "w") push("#ffffff", x, y);
-    else if (c === "h") push(mixC(COL.c, "#ffffff", .38), x, y);
+    else if (c === "h") push(mixC(markAt(x, y) ? (pat === "belly" ? mixC(COL.c, "#ffffff", .55) : COL.pc) : COL.c, "#ffffff", .38), x, y);
     else if (c === "d") push(shadeC(shadeC(COL.c)), x, y);
     else if (c === "p") push(COL.pc, x, y);
     else if (c === "q") push(shadeC(COL.pc), x, y);
@@ -3043,7 +3049,7 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
     else if (c === "x") push("#5f9e55", x, y);
     else if (c === "y") push("#ffd45e", x, y);
     else if (c === "b") push(CHEEK_C[genes.cheek] || "#f0889a", x, y);
-    else if (c === "l" || c === "s"){ const base = crit && genes.pattern === "belly" && markAt(x, y) ? mixC(COL.c, "#ffffff", .55) : markAt(x, y) ? COL.pc : COL.c; push(c === "s" ? shadeC(base) : base, x, y); }
+    else if (c === "l" || c === "s"){ const base = crit && pat === "belly" && markAt(x, y) ? mixC(COL.c, "#ffffff", .55) : markAt(x, y) ? COL.pc : COL.c; push(c === "s" ? shadeC(base) : base, x, y); }
   } });
   const X = x => ox + (flip ? width - 1 - x : x);
   return Object.entries(fills).map(([f, pts]) => {
@@ -3197,7 +3203,7 @@ document.addEventListener("click", e => {
   if (d.calview){ calView = d.calview; agendaDays = 14; render(); return; }
   if (d.weeknav){ calSel = addDays(calSel, Number(d.weeknav)); calMonth = calSel.slice(0,7); render(); return; }
   if (d.tagDel){ const ts = tags(); saveCfg({tags: ts.filter(t => t.id !== d.tagDel)}); if (catFilter === d.tagDel) catFilter = "all"; return; }
-  if (d.plan){ togglePlanned(viewDay, d.plan); return; }
+  if (d.plan){ togglePlanned(d.planDay || viewDay, d.plan); return; }
   if (d.repeat){ repeatSheet(d.repeat); return; }
   if (d.foodtab){ foodTab = d.foodtab; window.scrollTo(0,0); render(); return; }
   if (d.foodday !== undefined){ const n = +d.foodday; foodDay = n === 0 ? null : addDays(foodDay || today(), n); if (foodDay && foodDay >= today()) foodDay = null; render(); return; }
