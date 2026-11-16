@@ -2188,12 +2188,14 @@ function eventSheet(id, preset = {}){
   const src = id ? items[id] : null;
   const occ = preset.occ || (src ? src.date : null);
   const isSeries = !!(src && src.repeat && src.repeat.freq);
+  const splits = isSeries ? all("event").filter(x => x.id !== id && !(x.repeat && x.repeat.freq) && (x.seriesOf === id || (!x.seriesOf && (src.ex || []).includes(x.date)))) : [];
   const e = src ? {...src} : {title:"", date: preset.date || today(), start:"", end:"", note:"", cat: catFilter === "work" ? "work" : catFilter === "life" ? "life" : (tagById(catFilter) && tagById(catFilter).cat !== "both" ? tagById(catFilter).cat : defCat()), tags: tagById(catFilter) ? [catFilter] : [], show:"busy"};
   // when editing one occurrence, show that occurrence's dates
   let date = e.date, endDate = e.endDate || "";
   if (isSeries && occ && occ !== e.date){ const sp = spanOf(e); date = occ; endDate = sp ? addDays(occ, sp) : ""; }
   const allDay = !!e.allDay || (src && !e.start);
   sheet(id ? "Event" : "New event", `
+    ${isSeries && splits.length ? `<label class="fld" style="display:flex;align-items:center;gap:12px"><span style="margin:0;flex:1">Also update the ${splits.length} day${splits.length === 1 ? "" : "s"} changed separately<span class="sub" style="display:block;text-transform:none;letter-spacing:0;font-family:var(--sans)">${splits.slice(0, 4).map(x => esc(fmtDay(x.date))).join(", ")}${splits.length > 4 ? "…" : ""}. They rejoin the series.</span></span><input type="checkbox" class="switch" name="rejoin" checked></label>` : ""}
     ${isSeries ? `<div class="fld"><span>Apply changes to</span><div class="seg" data-seg="scope"><button type="button" data-val="all" class="on">All in series</button><button type="button" data-val="one">Only this one</button></div><input type="hidden" name="scope" value="all"></div>` : ""}
     <label class="fld"><span>Title</span><input name="title" value="${esc(e.title)}" required></label>
     <div class="fld"><span>Category & tags</span>${catPicker(catOf(e), extraIds(e))}</div>
@@ -2219,8 +2221,11 @@ function eventSheet(id, preset = {}){
         repeat: rep, remind: f.remind.value === "" ? null : Number(f.remind.value), show: f.show.value, note: f.note.value};
       if (isSeries && f.scope.value === "one"){
         put(id, {...src, ex: [...new Set([...(src.ex || []), occ])]}, {silent: true});
-        put(uid(), {kind:"event", created: Date.now(), ...body, repeat: null, ex: []});
+        put(uid(), {kind:"event", created: Date.now(), ...body, repeat: null, ex: [], seriesOf: id});
         return;
+      }
+      if (isSeries && f.rejoin && f.rejoin.checked && splits.length){
+        splits.forEach(x => del(x.id)); src.ex = (src.ex || []).filter(d => !splits.some(x => x.date === d));
       }
       if (isSeries){ // whole series: keep the original first date unless the user moved it
         if (d0 === occ){ body.date = src.date; body.endDate = ed ? addDays(src.date, dIdx(ed) - dIdx(d0)) : null; }
