@@ -441,6 +441,10 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .scanov [data-x]{position:absolute;bottom:calc(30px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%)}
 .scantip{position:absolute;top:calc(30px + env(safe-area-inset-top));left:0;right:0;text-align:center;color:#fff;font-size:14px}
 .warnt{color:var(--warn);font-weight:600}
+
+.dls{display:flex;gap:3px;margin-top:6px}
+.dl{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font:500 9.5px var(--pix);color:var(--muted);border:1px solid var(--line)}
+.dl.on{background:var(--ink);color:var(--lcd-2);border-color:var(--ink)}
 </style>
 </head>
 <body>
@@ -811,7 +815,7 @@ function setWater(d, amt){ const c = cfg(); setDay(d, {waterMl: Math.max(0, amt)
 function bodyChecks(d){
   const dd = dayDoc(d), c = cfg(), out = [];
   if (c.water.on) out.push(["Water", (waterAmt(dd, c) || 0) >= c.water.goal]);
-  if (c.meals.on) out.push(["Meals", c.meals.list.every(m => (dd.meals||{})[m.id])]);
+  if (c.meals.on){ const pl = plannedFor(d); if (pl.length) out.push(["Food", pl.every(r => eatenRepeat(d, r.id))]); }
   if (c.sleep.on) out.push(["Sleep", sleepHours(dd) != null]);
   return out;
 }
@@ -911,7 +915,9 @@ function viewToday(){
   <div class="card" style="margin-top:10px">
     ${sc.total ? `<div class="prog"><i style="width:${Math.round(n/sc.total*100)}%"></i></div>` : ""}
     ${c.water.on ? `<div class="row col">${waterBlock(dd)}</div>` : ""}
-    ${c.meals.on ? `<div class="row ${mealsDone===c.meals.list.length?"done":""}"><input type="checkbox" class="chk" disabled ${mealsDone===c.meals.list.length?"checked":""} aria-label="All meals"><div class="grow"><div class="t">Meals</div><div class="m">${mealsDone} of ${c.meals.list.length}</div></div></div>${mealRows(meals)}` : ""}
+    ${c.meals.on ? (() => { const pl = plannedFor(viewDay); if (!pl.length) return repeats().length ? "" : `<div class="row tap" data-go="food" data-foodtab-go="repeats"><input type="checkbox" class="chk" disabled aria-label="Food"><div class="grow"><div class="t">Food</div><div class="m">Set up foods you eat on set days</div></div><span class="sub">›</span></div>`;
+      const done = pl.filter(r => eatenRepeat(viewDay, r.id)).length, kc = pl.reduce((a, r) => a + r.kcal * (r.qty || 1), 0);
+      return `<div class="row ${done===pl.length?"done":""}"><input type="checkbox" class="chk" disabled ${done===pl.length?"checked":""} aria-label="All planned food eaten"><div class="grow"><div class="t">Food</div><div class="m">${done} of ${pl.length} · ${Math.round(kc).toLocaleString()} cal planned</div></div></div>${plannedRows(viewDay)}`; })() : ""}
     ${c.sleep.on ? `<div class="row col"><div class="rowhead"><input type="checkbox" class="chk" disabled ${sh!=null?"checked":""} aria-label="Sleep logged"><div class="grow"><div class="t">Sleep</div><div class="m">${sh!=null?`${sh} hours · goal ${c.sleep.goal}`:"When you fell asleep and woke up"}</div></div></div>${sleepInputs(dd.sleep||{})}</div>` : ""}
     ${hs.map(h => `<div class="row ${done[h.id]?"done":""}"><input type="checkbox" class="chk" data-habit="${h.id}" ${done[h.id]?"checked":""} aria-label="${esc(h.title)}"><div class="grow t">${esc(h.title)}</div></div>`).join("")}
     ${!hs.length ? `<div class="empty" ${sc.total?'style="border-top:1px solid var(--line)"':""}>Add the habits you want to do every day.<div class="chips" style="margin-top:12px"><button class="btn sm" data-go="settings">Add habits</button></div></div>` : ""}
@@ -1063,7 +1069,8 @@ function viewTrends(){
   ${(() => { const fr = foodCalc(); const kv = days.map(d => { const x = dayOf(d); return x && x.eats && x.eats.length ? Math.round(sumEats(x.eats).kcal) : null; }); if (!kv.some(v => v != null)) return "";
     const tgt = fr ? fr.target : Math.max(...kv.filter(v => v != null));
     return `<div class="bcard"><div class="lbl">Calories eaten</div>${fr ? statLine(kv, tgt, "cal", days, true) : ""}${barChart("kcal", days, kv, tgt, Math.max(Math.ceil(tgt * 1.3 / 100) * 100, ...kv.filter(v => v != null)), "cal", true)}</div>`; })()}
-  ${c.meals.on ? `<div class="bcard"><div class="lbl">Meals · of ${nm}</div>${statLine(mv, nm, "meals", days)}${barChart("meals", days, mv, nm, nm, "meals")}</div>` : ""}`;
+  ${(() => { if (!repeats().length) return ""; const pv = days.map(d => { if (d > t) return null; const pl = plannedFor(d); if (!pl.length) return null; return Math.round(pl.filter(r => eatenRepeat(d, r.id)).length / pl.length * 100); });
+    return `<div class="bcard"><div class="lbl">Planned food eaten · %</div>${statLine(pv, 100, "%", days)}${barChart("plan", days, pv, 100, 100, "%")}</div>`; })()}`;
 }
 function wireCharts(){
   document.querySelectorAll("[data-chart]").forEach(ch => {
@@ -1428,6 +1435,62 @@ async function scanBarcode(onCode){
   tick();
 }
 
+/* ---------- repeat (planned) foods ---------- */
+const repeats = () => all("foodRepeat").sort((a, b) => { const o = id => { const i = foodMeals().findIndex(m => m.id === id); return i < 0 ? 99 : i; }; return o(a.meal) - o(b.meal) || (a.created || 0) - (b.created || 0); });
+const plannedFor = d => repeats().filter(r => (r.days || []).includes(parse(d).getDay()));
+const eatenRepeat = (d, rid) => eatsOf(d).find(e => e.repeatId === rid);
+const mealName = id => (foodMeals().find(m => m.id === id) || {name: "Other"}).name;
+const dayLetters = days => DOW.map((n, i) => `<span class="dl ${days.includes(i) ? "on" : ""}">${n.slice(0, 1)}</span>`).join("");
+function togglePlanned(d, rid){
+  const r = items[rid]; if (!r) return;
+  const dd = dayDoc(d), list = dd.eats || [], has = list.find(e => e.repeatId === rid);
+  if (has) setDay(d, {eats: list.filter(e => e !== has)});
+  else setDay(d, {eats: list.concat([{id: uid(), repeatId: rid, name: r.name, qty: r.qty || 1, meal: r.meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f, at: Date.now()}])});
+}
+function plannedRows(d, indent = 48){
+  return plannedFor(d).map(r => { const on = !!eatenRepeat(d, r.id);
+    return `<label class="row ${on ? "done" : ""}" style="padding-left:${indent}px;min-height:44px"><input type="checkbox" class="chk" data-plan="${r.id}" ${on ? "checked" : ""}><div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round(r.kcal * (r.qty || 1))} cal</div></div></label>`; }).join("");
+}
+function viewRepeats(){
+  const rs = repeats();
+  return `<div style="margin-top:14px"><button class="btn pri" data-act="new-repeat">New repeat</button></div>
+  <div class="sub" style="margin-top:10px">Foods you eat on set days. They show on Today as a checklist, and checking one off logs it here.</div>
+  <div class="card" style="margin-top:12px">${rs.length ? rs.map(r => `<div class="row tap" data-repeat="${r.id}"><div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round(r.kcal * (r.qty || 1))} cal · P ${Math.round(r.p * (r.qty || 1))} · C ${Math.round(r.c * (r.qty || 1))} · F ${Math.round(r.f * (r.qty || 1))}</div><div class="dls">${dayLetters(r.days || [])}</div></div><span class="sub">›</span></div>`).join("") : `<div class="empty">No repeats yet.</div>`}</div>`;
+}
+function repeatSheet(id){
+  const x = id ? items[id] : {name: "", qty: 1, meal: (foodMeals()[0] || {}).id, kcal: "", p: "", c: "", f: "", days: [1, 2, 3, 4, 5]};
+  const recent = myFoods().slice(0, 12);
+  sheet(id ? "Edit repeat" : "New repeat", `
+    ${id ? "" : `<div class="fld"><span>Search foods</span><div class="quick" style="margin-top:0"><input id="fs-q" placeholder="Search" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-fs-go>Search</button>${"BarcodeDetector" in window ? `<button type="button" class="btn" data-fs-scan aria-label="Scan barcode">Scan</button>` : ""}</div><div id="fs-out" class="fsout"></div></div>`}
+    ${!id && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(f => `<button type="button" class="chip" data-pick="${f.id}">${esc(f.name)}</button>`).join("")}</div></div>` : ""}
+    <label class="fld"><span>Food</span><input name="name" value="${esc(x.name)}" required></label>
+    <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.1" step="any" inputmode="decimal" value="${x.qty || 1}"></label>
+      <label class="fld"><span>Meal</span><select name="meal">${foodMeals().map(m => `<option value="${esc(m.id)}" ${x.meal===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></label></div>
+    <div class="fld"><span>Days</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${(x.days||[]).includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${(x.days||[]).join(",")}">
+      <div class="chips" style="margin-top:6px"><button type="button" class="link" data-days="0,1,2,3,4,5,6" style="padding:2px 0">Every day</button><button type="button" class="link" data-days="1,2,3,4,5" style="padding:2px 0">Weekdays</button><button type="button" class="link" data-days="0,6" style="padding:2px 0">Weekends</button></div></div>
+    <div class="sub" style="margin:-2px 0 8px" id="fs-serv">Per serving</div>
+    <div class="two"><label class="fld"><span>Calories</span><input name="kcal" type="number" min="0" step="any" inputmode="decimal" value="${x.kcal}" required></label>
+      <label class="fld"><span>Protein (g)</span><input name="p" type="number" min="0" step="any" inputmode="decimal" value="${x.p}"></label></div>
+    <div class="two"><label class="fld"><span>Carbs (g)</span><input name="c" type="number" min="0" step="any" inputmode="decimal" value="${x.c}"></label>
+      <label class="fld"><span>Fat (g)</span><input name="f" type="number" min="0" step="any" inputmode="decimal" value="${x.f}"></label></div>
+    ${id ? `<div class="sub">Changes apply from now on. Days you already checked off keep their numbers.</div>` : ""}`,
+    f => {
+      const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories per serving.";
+      const days = f.days.value.split(",").filter(v => v !== "").map(Number); if (!days.length) return "Pick at least one day.";
+      const n = v => Math.max(0, Number(v) || 0);
+      put(id || uid(), {...(id ? items[id] : {kind: "foodRepeat", created: Date.now()}), name, qty: Math.max(0.1, Number(f.qty.value) || 1), meal: f.meal.value, days, kcal: n(f.kcal.value), p: n(f.p.value), c: n(f.c.value), f: n(f.f.value)});
+      if (!myFoods().some(m => m.name.toLowerCase() === name.toLowerCase())) put(uid(), {kind: "foodItem", name, kcal: n(f.kcal.value), p: n(f.p.value), c: n(f.c.value), f: n(f.f.value), last: Date.now()}, {silent: true});
+    },
+    id ? () => confirmSheet("Delete this repeat?", "It stops showing on Today. Days you already logged keep their entries.", () => del(id)) : null);
+  const S = $(".sheet");
+  wireFoodSearch(S);
+  S.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const m = items[b.dataset.pick]; if (!m) return;
+    S.querySelector("[name=name]").value = m.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = m[k] ?? "");
+    S.querySelectorAll("[data-pick]").forEach(y => y.classList.toggle("on", y === b)); });
+  S.querySelectorAll("[data-days]").forEach(b => b.onclick = () => { const ds = b.dataset.days.split(","); const dp = S.querySelector("[data-daypick]");
+    dp.querySelectorAll("button").forEach(x => x.classList.toggle("on", ds.includes(x.dataset.val))); dp.nextElementSibling.value = ds.join(","); });
+}
+
 /* ---------- Food tracker ---------- */
 let foodTab = "log", foodDay = null;
 const eatsOf = d => ((items["day-" + d] || {}).eats || []);
@@ -1441,7 +1504,8 @@ function macroBar(lbl, got, target, unit){
 }
 function viewFoodApp(){
   const menu = `<div class="kicker">Food tracker</div><h1>Food</h1>
-    <div class="chips" style="margin-top:10px">${[["log","Log"],["foods","My foods"],["targets","Targets"]].map(([k, l]) => `<button class="chip ${foodTab===k?"on":""}" data-foodtab="${k}">${l}</button>`).join("")}</div>`;
+    <div class="chips" style="margin-top:10px">${[["log","Log"],["repeats","Repeats"],["foods","My foods"],["targets","Targets"]].map(([k, l]) => `<button class="chip ${foodTab===k?"on":""}" data-foodtab="${k}">${l}</button>`).join("")}</div>`;
+  if (foodTab === "repeats") return menu + viewRepeats();
   if (foodTab === "targets") return menu + viewFood().replace(/^<div class="kicker">[^<]*<\/div><h1>Food<\/h1>/, "");
   if (foodTab === "foods"){
     const fs = myFoods();
@@ -1460,7 +1524,7 @@ function viewFoodApp(){
   </div>
   ${foodMeals().map(m => { const list = es.filter(e => (e.meal || "other") === m.id); const st = sumEats(list);
     return `<h2>${esc(m.name)}<span class="sp"></span>${list.length ? `<span class="sub" style="font-family:var(--sans);text-transform:none;letter-spacing:0">${r0(st.kcal)} cal</span>` : ""}<button class="link" data-food-add="${esc(m.id)}">+ Add</button></h2>
-    ${list.length ? `<div class="card">${list.map(e => `<div class="row"><div class="grow tap" data-food-edit="${esc(e.id)}"><div class="t">${esc(e.name)}${(+e.qty || 1) !== 1 ? ` <span class="sub">× ${e.qty}</span>` : ""}</div><div class="m">${r0(e.kcal * (e.qty || 1))} cal · P ${r0(e.p * (e.qty || 1))} · C ${r0(e.c * (e.qty || 1))} · F ${r0(e.f * (e.qty || 1))}</div></div><button class="ghost" data-food-del="${esc(e.id)}" aria-label="Remove">✕</button></div>`).join("")}</div>` : ""}`; }).join("")}`;
+    ${list.length ? `<div class="card">${list.map(e => `<div class="row"><div class="grow tap" data-food-edit="${esc(e.id)}"><div class="t">${esc(e.name)}${(+e.qty || 1) !== 1 ? ` <span class="sub">× ${e.qty}</span>` : ""}${e.repeatId ? ` <span class="sub">↻</span>` : ""}</div><div class="m">${r0(e.kcal * (e.qty || 1))} cal · P ${r0(e.p * (e.qty || 1))} · C ${r0(e.c * (e.qty || 1))} · F ${r0(e.f * (e.qty || 1))}</div></div><button class="ghost" data-food-del="${esc(e.id)}" aria-label="Remove">✕</button></div>`).join("")}</div>` : ""}`; }).join("")}`;
 }
 function foodEntrySheet(meal, editId){
   const d = foodDay || today(), es = eatsOf(d), cur = editId ? es.find(e => e.id === editId) : null;
@@ -1700,9 +1764,9 @@ function viewSettings(){
     <div class="row"><div class="grow"><div class="t">Daily goal</div><div class="m">${c.water.auto ? "Set from your weight · " : ""}${Math.min(24, Math.max(1, Math.round(c.water.goal / c.water.step)))} blocks to fill</div></div><input class="num" id="set-water-goal" type="number" min="0.1" step="any" inputmode="decimal" value="${c.water.goal}" ${c.water.auto?"disabled":""}><span class="sub">${u}</span></div>
   </div>
 
-  <h2>Meals</h2>
+  <h2>Meal times</h2>
+  <div class="sub" style="margin:-4px 0 10px">Sections in the food log and for your repeat foods.</div>
   <div class="card">
-    ${sw("meals", c.meals.on, "Show on Today")}
     ${c.meals.list.map((m, i) => `<div class="row"><input class="inl" data-meal-name="${esc(m.id)}" value="${esc(m.name)}" aria-label="Meal name"><button type="button" class="ghost" data-meal-up="${esc(m.id)}" ${i===0?"disabled":""} aria-label="Move up">↑</button><button type="button" class="ghost" data-meal-del="${esc(m.id)}" aria-label="Remove">✕</button></div>`).join("")}
     <form class="row" data-form="newmeal"><input class="inl" id="new-meal" placeholder="Add a meal…" autocomplete="off"><button class="btn sm">Add</button></form>
   </div>
@@ -1743,6 +1807,7 @@ function viewSettings(){
   <h2>Today screen</h2>
   <div class="card">
     ${sw("goals", c.goals.on, "Goals")}
+    ${sw("meals", c.meals.on, "Planned food checklist")}
     ${sw("journal", c.journal.on, "Journal")}
     ${sw("agenda", c.agenda.on, "Schedule and tasks due")}
   </div>
@@ -1936,10 +2001,10 @@ function render(){
 
 /* ---------- events ---------- */
 document.addEventListener("click", e => {
-  const el = e.target.closest("[data-foodtab],[data-foodday],[data-food-add],[data-food-edit],[data-food-del],[data-food-item],[data-food-sex],[data-food-act],[data-food-goal],[data-kit-on],[data-kit-preset],[data-kit-font],[data-kit-reset],[data-goal-open],[data-goal-close],[data-goal-quick],[data-gstep],[data-gstep-del],[data-glog-del],[data-calview],[data-weeknav],[data-tag-del],[data-theme-pick],[data-toggle],[data-meal-up],[data-meal-del],[data-hab-up],[data-hab-del],[data-waterset],[data-notesmode],[data-open-journal],[data-water],[data-meal],[data-food],[data-quality],[data-range],[data-catfilter],[data-quickcat],[data-go],[data-act],[data-toggle-task],[data-edit-task],[data-edit-event],[data-habit],[data-viewday],[data-calsel],[data-calnav],[data-taskfilter],[data-quickdue],[data-open-note],[data-open-html]");
+  const el = e.target.closest("[data-plan],[data-repeat],[data-foodtab],[data-foodday],[data-food-add],[data-food-edit],[data-food-del],[data-food-item],[data-food-sex],[data-food-act],[data-food-goal],[data-kit-on],[data-kit-preset],[data-kit-font],[data-kit-reset],[data-goal-open],[data-goal-close],[data-goal-quick],[data-gstep],[data-gstep-del],[data-glog-del],[data-calview],[data-weeknav],[data-tag-del],[data-theme-pick],[data-toggle],[data-meal-up],[data-meal-del],[data-hab-up],[data-hab-del],[data-waterset],[data-notesmode],[data-open-journal],[data-water],[data-meal],[data-food],[data-quality],[data-range],[data-catfilter],[data-quickcat],[data-go],[data-act],[data-toggle-task],[data-edit-task],[data-edit-event],[data-habit],[data-viewday],[data-calsel],[data-calnav],[data-taskfilter],[data-quickdue],[data-open-note],[data-open-html]");
   if (!el) return;
   const d = el.dataset;
-  if (d.go){ if (d.mode) notesMode = d.mode; go(d.go); return; }
+  if (d.go){ if (d.mode) notesMode = d.mode; if (d.foodtabGo) foodTab = d.foodtabGo; go(d.go); return; }
   if (d.goalOpen){ goalOpen = d.goalOpen; if (tab === "apps" && app === "goals"){ window.scrollTo(0,0); render(); } else go("goals"); return; }
   if (d.goalClose !== undefined){ goalOpen = null; window.scrollTo(0,0); render(); return; }
   if (d.goalQuick){ quickLog(d.goalQuick); return; }
@@ -1949,6 +2014,8 @@ document.addEventListener("click", e => {
   if (d.calview){ calView = d.calview; agendaDays = 14; render(); return; }
   if (d.weeknav){ calSel = addDays(calSel, Number(d.weeknav)); calMonth = calSel.slice(0,7); render(); return; }
   if (d.tagDel){ const ts = tags(); saveCfg({tags: ts.filter(t => t.id !== d.tagDel)}); if (catFilter === d.tagDel) catFilter = "all"; return; }
+  if (d.plan){ togglePlanned(viewDay, d.plan); return; }
+  if (d.repeat){ repeatSheet(d.repeat); return; }
   if (d.foodtab){ foodTab = d.foodtab; window.scrollTo(0,0); render(); return; }
   if (d.foodday !== undefined){ const n = +d.foodday; foodDay = n === 0 ? null : addDays(foodDay || today(), n); if (foodDay && foodDay >= today()) foodDay = null; render(); return; }
   if (d.foodAdd){ foodEntrySheet(d.foodAdd); return; }
@@ -2000,6 +2067,7 @@ document.addEventListener("click", e => {
     case "new-task": taskSheet(null, {date: d.date || (quickDue==="today"?today():quickDue==="tomorrow"?addDays(today(),1):"")}); break;
     case "new-note": openNote(uid()); break;
     case "paste-html": htmlSheet(null); break;
+    case "new-repeat": repeatSheet(null); break;
     case "food-new-item": foodItemSheet(null); break;
     case "new-goal": goalSheet(null); break;
     case "goal-edit": goalSheet(goalOpen); break;
