@@ -170,6 +170,12 @@ html[data-theme="handheld"] .row{border-top-style:dashed}
 .row .t{overflow-wrap:anywhere}
 .row .m{color:var(--muted);font-size:12px;margin-top:1px}
 .row.tap{cursor:pointer}
+.grip{flex:none;align-self:stretch;display:grid;place-items:center;width:30px;margin:-12px -10px -12px -6px;color:var(--muted);touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
+.grip svg{width:12px;height:18px;fill:currentColor;opacity:.7}
+.row.col .grip{margin:0 -6px 0 -8px;align-self:center;height:34px}
+[data-reorder].sorting [data-oid]{transition:transform .15s}
+[data-reorder].sorting [data-oid].dragging{transition:none;position:relative;z-index:5;background:var(--lcd);box-shadow:0 6px 18px rgba(0,0,0,.18)}
+body.sorting-now{-webkit-user-select:none;user-select:none}
 .row.col{flex-direction:column;align-items:stretch;gap:10px}
 .rowhead{display:flex;align-items:center;gap:10px}
 .empty{color:var(--muted);padding:16px;font-size:13.5px}
@@ -786,6 +792,53 @@ const SHOW = {busy:"Busy", free:"Free", tentative:"Tentative", away:"Away"};
 const REMIND = [["","None"],["0","At start time"],["5","5 minutes before"],["10","10 minutes before"],["15","15 minutes before"],["30","30 minutes before"],["60","1 hour before"],["120","2 hours before"],["1440","1 day before"]];
 
 /* ---------- Today ---------- */
+const GRIP = `<span class="grip" data-grip role="button" aria-label="Drag to reorder"><svg viewBox="0 0 12 18"><circle cx="3" cy="3" r="1.6"/><circle cx="9" cy="3" r="1.6"/><circle cx="3" cy="9" r="1.6"/><circle cx="9" cy="9" r="1.6"/><circle cx="3" cy="15" r="1.6"/><circle cx="9" cy="15" r="1.6"/></svg></span>`;
+const byOrder = (fallback, missingFirst) => (a, b) => { const ao = a.order, bo = b.order, ha = typeof ao === "number", hb = typeof bo === "number";
+  if (ha && hb && ao !== bo) return ao - bo; if (ha !== hb) return (ha ? 1 : -1) * (missingFirst ? 1 : -1); return fallback(a, b); };
+const setOrder = ids => ids.forEach((id, i) => { if (items[id] && items[id].order !== i) put(id, {...items[id], order: i}, {silent: true}); });
+const REORDER = {
+  meals: ids => { const c = cfg(); saveCfg({mealsCfg: {...c.meals, list: ids.map(id => c.meals.list.find(m => m.id === id)).filter(Boolean)}}); },
+  habits: ids => { setOrder(ids); render(); },
+  tags: ids => { const raw = (items.settings || {}).tags || []; saveCfg({tags: [...raw.filter(t => t.id === "work" || t.id === "life"), ...ids.map(id => raw.find(t => t.id === id)).filter(Boolean)]}); },
+  goals: ids => { setOrder(ids); render(); },
+  foods: ids => { setOrder(ids); render(); },
+  repeats: ids => { setOrder(ids); render(); },
+  tasks: ids => { setOrder(ids); render(); },
+  eats: (ids, d) => { const es = eatsOf(d), moved = ids.map(id => es.find(e => e.id === id)).filter(Boolean); setDay(d, {eats: [...es.filter(e => !ids.includes(e.id)), ...moved]}); },
+};
+let drag = null;
+document.addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-grip]"); if (!g) return;
+  const row = g.closest("[data-oid]"), box = row && row.closest("[data-reorder]"); if (!box) return;
+  const rows = [...box.querySelectorAll(":scope > [data-oid]")]; if (rows.length < 2) return;
+  e.preventDefault();
+  const sy = scrollY, rects = rows.map(r => { const b = r.getBoundingClientRect(); return {top: b.top + sy, h: b.height}; }), from = rows.indexOf(row);
+  drag = {g, row, box, rows, rects, from, to: from, y0: e.clientY + sy, pid: e.pointerId, lastY: e.clientY};
+  try { g.setPointerCapture(e.pointerId); } catch {}
+  box.classList.add("sorting"); row.classList.add("dragging"); document.body.classList.add("sorting-now");
+});
+function dragMove(clientY){
+  const D = drag, y = clientY + scrollY, dy = y - D.y0, mid = D.rects[D.from].top + D.rects[D.from].h / 2 + dy, h = D.rects[D.from].h;
+  let to = D.from;
+  D.rects.forEach((r, i) => { const c = r.top + r.h / 2; if (i > D.from && mid > c) to = i; if (i < D.from && mid < c && to === D.from) to = i; });
+  for (let i = 0; i < D.from; i++) if (mid < D.rects[i].top + D.rects[i].h / 2){ to = i; break; }
+  D.to = to;
+  D.row.style.transform = `translateY(${dy}px)`;
+  D.rows.forEach((r, i) => { if (i === D.from) return; const sh = (D.from < i && i <= to) ? -h : (to <= i && i < D.from) ? h : 0; r.style.transform = sh ? `translateY(${sh}px)` : ""; });
+}
+document.addEventListener("pointermove", e => { if (!drag || e.pointerId !== drag.pid) return; e.preventDefault(); drag.lastY = e.clientY; dragMove(e.clientY);
+  const edge = 70; if (e.clientY > innerHeight - edge) scrollBy(0, 10); else if (e.clientY < edge) scrollBy(0, -10); }, {passive: false});
+addEventListener("scroll", () => { if (drag) dragMove(drag.lastY); }, {passive: true});
+function dragEnd(){
+  const D = drag; if (!D) return; drag = null;
+  D.rows.forEach(r => r.style.transform = ""); D.row.classList.remove("dragging"); D.box.classList.remove("sorting"); document.body.classList.remove("sorting-now");
+  if (D.to === D.from) return;
+  const ids = D.rows.map(r => r.dataset.oid); ids.splice(D.to, 0, ids.splice(D.from, 1)[0]);
+  const [k, ...arg] = D.box.dataset.reorder.split(":"); if (REORDER[k]) REORDER[k](ids, arg.join(":"));
+}
+document.addEventListener("pointerup", e => { if (drag && e.pointerId === drag.pid) dragEnd(); });
+document.addEventListener("pointercancel", e => { if (drag && e.pointerId === drag.pid) dragEnd(); });
+document.addEventListener("click", e => { if (e.target.closest("[data-grip]")){ e.stopPropagation(); e.preventDefault(); } }, true);
 function habitsList(){ return all("habit").filter(h => !h.archived).sort((a,b) => (a.order||0)-(b.order||0)); }
 function dayDoc(d){ return items["day-" + d] || {kind:"day", date:d, done:{}, reflect:""}; }
 const UNITS = {glasses:{ml:240, n:"glasses", step:1}, cups:{ml:240, n:"cups", step:1}, oz:{ml:29.5735, n:"oz", step:8}, ml:{ml:1, n:"ml", step:250}, bottles:{ml:500, n:"bottles", step:1}};
@@ -866,12 +919,12 @@ function eventsFor(d){
     .sort((a,b) => ((a.allDay||!a.start||a.dayN>0)?0:1) - ((b.allDay||!b.start||b.dayN>0)?0:1) || (a.start||"").localeCompare(b.start||""));
 }
 
-function taskRow(t){
+function taskRow(t, dr){
   const late = !t.done && t.due && t.due < today();
   const meta = [catTag(t)];
   if (t.due) meta.push(`<span class="tag ${late?"warn":""}">${esc(relDay(t.due))}${t.time?" · "+fmtTime(t.time):""}</span>`);
   if (t.notes) meta.push(esc(t.notes.split("\n")[0].slice(0,60)));
-  return `<div class="row ${t.done?"done":""}">
+  return `<div class="row ${t.done?"done":""}" ${dr ? `data-oid="${t.id}"` : ""}>${dr ? GRIP : ""}
     <span class="bar-l" style="--c:${firstColor(t)}"></span><input type="checkbox" class="chk" data-toggle-task="${t.id}" ${t.done?"checked":""} aria-label="Done">
     <div class="grow tap" data-edit-task="${t.id}"><div class="t">${esc(t.title)}</div>${meta.length?`<div class="m">${meta.join(" ")}</div>`:""}</div>
   </div>`;
@@ -899,7 +952,7 @@ function viewToday(){
   const sun = addDays(t, -parse(t).getDay()), week = []; for (let i = 0; i < 7; i++) week.push(addDays(sun, i));
   const hr = new Date().getHours();
   const greet = hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
-  const od = overdue(), dueToday = tasksFor(t).sort((a,b)=> (a.done-b.done) || (a.time||"99").localeCompare(b.time||"99")), evs = eventsFor(t);
+  const od = overdue(), dueToday = tasksFor(t).sort((a,b)=> (a.done-b.done) || (a.time||"99").localeCompare(b.time||"99") || byOrder((x,y) => (x.created||0)-(y.created||0))(a,b)), evs = eventsFor(t);
   const s0 = dayScore(t), pc = s0.total ? Math.round(s0.n / s0.total * 100) : 0;
   const mealsDone = c.meals.list.filter(m => meals[m.id]).length;
   return `
@@ -926,8 +979,8 @@ function viewToday(){
   <div class="card">${evs.length ? evs.map(eventRow).join("") : `<div class="empty">Nothing scheduled.</div>`}</div>
   <h2>Due today<span class="sp"></span><button class="link" data-go="tasks">All tasks</button></h2>
   <div class="card">
-    ${od.length ? od.map(taskRow).join("") : ""}
-    ${dueToday.length ? dueToday.map(taskRow).join("") : (od.length ? "" : `<div class="empty">Nothing due.</div>`)}
+    ${od.length ? od.map(x => taskRow(x)).join("") : ""}
+    ${dueToday.length ? dueToday.map(x => taskRow(x)).join("") : (od.length ? "" : `<div class="empty">Nothing due.</div>`)}
   </div>
   <form class="quick" data-form="quick-today"><input id="q-today" placeholder="Add something for today…" autocomplete="off"><button class="btn pri">Add</button></form>` : ""}
   `;
@@ -943,7 +996,7 @@ function viewApps(){
 function viewTasks(){
   const t = today(), ts = all("task").filter(catOk);
   const open = ts.filter(x => !x.done);
-  const sortT = (a,b) => (a.due||"9999").localeCompare(b.due||"9999") || (a.time||"99").localeCompare(b.time||"99") || (a.created||0)-(b.created||0);
+  const sortT = (a,b) => (a.due||"9999").localeCompare(b.due||"9999") || (a.time||"99").localeCompare(b.time||"99") || byOrder((x,y) => (x.created||0)-(y.created||0))(a,b);
   const groups = taskFilter === "done"
     ? [["Done", ts.filter(x => x.done).sort((a,b) => (b.doneAt||0)-(a.doneAt||0)).slice(0,100)]]
     : [
@@ -958,7 +1011,8 @@ function viewTasks(){
     </div><div class="chips">${CATS.map(([k,l]) => `<button class="chip ${defCat()===k?"on":""}" data-quickcat="${k}"><span class="cat" style="--c:${catColors()[k]}">${l}</span></button>`).join("")}</div>
   <div style="margin-top:6px"><button class="link" data-act="new-task" style="padding:4px 0">More options (time, notes)…</button></div>
   <div class="chips" style="margin-top:16px">${[["open","Open"],["done","Done"]].map(([k,l]) => `<button class="chip ${taskFilter===k?"on":""}" data-taskfilter="${k}">${l}</button>`).join("")}<span style="flex:1"></span>${catChips()}</div>
-  ${groups.filter(([,l]) => l.length).map(([n, l]) => `<h2>${n}</h2><div class="card">${l.map(taskRow).join("")}</div>`).join("") || `<div class="card" style="margin-top:16px"><div class="empty">${taskFilter==="done"?"Nothing finished yet.":"No open tasks."}</div></div>`}
+  ${groups.filter(([,l]) => l.length).map(([n, l]) => { const dr = (n === "Today" || n === "Someday") && l.filter(x => !x.time).length > 1;
+    return `<h2>${n}</h2><div class="card" ${dr ? `data-reorder="tasks"` : ""}>${l.map(x => taskRow(x, dr && !x.time)).join("")}</div>`; }).join("") || `<div class="card" style="margin-top:16px"><div class="empty">${taskFilter==="done"?"Nothing finished yet.":"No open tasks."}</div></div>`}
   ${taskFilter==="done" && ts.some(x=>x.done) ? `<div style="margin-top:12px"><button class="btn sm danger" data-act="clear-done">Clear finished tasks</button></div>` : ""}`;
 }
 
@@ -967,7 +1021,7 @@ function viewCalendar(){
   const t = today();
   const views = `<div class="chips" style="margin-top:6px">${[["month","Month"],["week","Week"],["agenda","Agenda"]].map(([k,l]) => `<button class="chip ${calView===k?"on":""}" data-calview="${k}">${l}</button>`).join("")}<span style="flex:1"></span><button class="btn sm pri" data-act="new-event" data-date="${calSel}">+ Event</button></div>`;
   const filt = `<div class="chips">${catChips()}</div>`;
-  const dayBlock = (d, withTasks = true) => { const ev = eventsFor(d).filter(catOk), tk = withTasks ? tasksFor(d).filter(catOk) : []; return {ev, tk, html: ev.map(eventRow).join("") + tk.map(taskRow).join("")}; };
+  const dayBlock = (d, withTasks = true) => { const ev = eventsFor(d).filter(catOk), tk = withTasks ? tasksFor(d).filter(catOk) : []; return {ev, tk, html: ev.map(eventRow).join("") + tk.map(x => taskRow(x)).join("")}; };
   if (calView === "week"){
     const sun = addDays(calSel, -parse(calSel).getDay()), days = Array.from({length: 7}, (_, i) => addDays(sun, i));
     const a = parse(days[0]), b = parse(days[6]);
@@ -1113,15 +1167,15 @@ function dueLine(g){
   return s;
 }
 const shortName = g => (g.short && g.short.trim()) || (g.title || "").trim().split(/\s+/)[0] || "Goal";
-const activeGoals = () => all("goal").filter(g => !g.archived).sort((a, b) => (a.created || 0) - (b.created || 0));
+const activeGoals = () => all("goal").filter(g => !g.archived).sort(byOrder((a, b) => (a.created || 0) - (b.created || 0)));
 function goalBar(g){ return `<div class="gbar" style="--cc:${catColor(g)}"><i style="width:${Math.round(goalProg(g) * 100)}%"></i></div>`; }
 function goalAction(g){
   if (g.type === "value" || g.type === "sum") return `<button class="btn sm" data-goal-quick="${g.id}">${g.type === "sum" ? "Add" : "Log"}</button>`;
   if (g.type === "reel") return `<button class="btn sm" data-open-html="bi-reel">Open</button>`;
   return "";
 }
-function goalRow(g){
-  return `<div class="row"><span class="bar-l" style="--c:${catColor(g)}"></span><div class="grow tap" data-goal-open="${g.id}"><div class="t">${esc(g.title)}</div>${goalBar(g)}<div class="m">${esc(goalLine(g))}${g.due ? " · " + esc(dueLine(g)) : ""}</div></div>${goalAction(g)}</div>`;
+function goalRow(g, dr){
+  return `<div class="row" ${dr ? `data-oid="${g.id}"` : ""}>${dr ? GRIP : ""}<span class="bar-l" style="--c:${catColor(g)}"></span><div class="grow tap" data-goal-open="${g.id}"><div class="t">${esc(g.title)}</div>${goalBar(g)}<div class="m">${esc(goalLine(g))}${g.due ? " · " + esc(dueLine(g)) : ""}</div></div>${goalAction(g)}</div>`;
 }
 function lineChart(key, pts, target, unit){
   const W = 340, H = 160, L = 44, R = 8, T = 12, B = 22, ph = H - T - B, pw = W - L - R;
@@ -1150,8 +1204,8 @@ function viewGoals(){
   if (!g){
     const act = activeGoals(), done = all("goal").filter(x => x.archived);
     return `<div class="hdr"><div class="grow"><div class="kicker">The long game</div><h1>Goals</h1></div><button class="btn pri" data-act="new-goal" style="margin-top:14px">New goal</button></div>
-    <div class="card" style="margin-top:14px">${act.length ? act.map(goalRow).join("") : `<div class="empty">No goals yet.</div>`}</div>
-    ${done.length ? `<h2>Archived</h2><div class="card">${done.map(goalRow).join("")}</div>` : ""}`;
+    <div class="card" style="margin-top:14px" data-reorder="goals">${act.length ? act.map(g => goalRow(g, act.length > 1)).join("") : `<div class="empty">No goals yet.</div>`}</div>
+    ${done.length ? `<h2>Archived</h2><div class="card">${done.map(g => goalRow(g)).join("")}</div>` : ""}`;
   }
   const pct = Math.round(goalProg(g) * 100), L = sortedLog(g);
   let body = "";
@@ -1180,7 +1234,7 @@ function viewGoals(){
   }
   return `<button class="link back" data-goal-close>‹ Goals</button>
   <div class="kicker">${catTag(g)}</div><h1>${esc(g.title)}</h1>
-  ${g.why ? `<div class="sub" style="margin-top:4px">${esc(g.why)}</div>` : ""}
+  ${g.why ? `<div class="sub" style="margin-top:4px;white-space:pre-wrap">${esc(g.why)}</div>` : ""}
   <div class="bcard"><div class="lbl">${esc(GTYPES[g.type] || "")}<span class="sp"></span>${pct}%</div>
     ${goalBar(g).replace('class="gbar"', 'class="gbar big-bar"')}
     <div class="statline" style="margin-top:8px"><b>${esc(goalLine(g))}</b>${g.due ? ` · ${esc(dueLine(g))}` : ""}</div></div>
@@ -1215,7 +1269,7 @@ function goalSheet(id){
     <div class="two g-num"><label class="fld"><span>Unit</span><input name="unit" value="${esc(g.unit||"")}" placeholder="Unit"></label>
       <label class="fld"><span>Target date (optional)</span><input name="due" type="date" value="${esc(g.due||"")}"></label></div>
     <label class="fld g-due2"><span>Target date (optional)</span><input name="due2" type="date" value="${esc(g.due||"")}"></label>
-    <label class="fld"><span>Why it matters (optional)</span><textarea name="why" style="min-height:70px">${esc(g.why||"")}</textarea></label>`,
+    <label class="fld"><span>Additional notes (optional)</span><textarea name="why" style="min-height:70px">${esc(g.why||"")}</textarea></label>`,
     f => {
       const title = f.title.value.trim(); if (!title) return "Name your goal.";
       const type = f.type.value, num = x => x === "" ? null : Number(x);
@@ -1433,7 +1487,7 @@ async function scanBarcode(onCode){
 }
 
 /* ---------- repeat (planned) foods ---------- */
-const repeats = () => all("foodRepeat").sort((a, b) => { const o = id => { const i = foodMeals().findIndex(m => m.id === id); return i < 0 ? 99 : i; }; return o(a.meal) - o(b.meal) || (a.created || 0) - (b.created || 0); });
+const repeats = () => all("foodRepeat").sort((a, b) => { const o = id => { const i = foodMeals().findIndex(m => m.id === id); return i < 0 ? 99 : i; }; return o(a.meal) - o(b.meal) || byOrder((x, y) => (x.created || 0) - (y.created || 0))(a, b); });
 const plannedFor = d => repeats().filter(r => (r.days || []).includes(parse(d).getDay()));
 const eatenRepeat = (d, rid) => eatsOf(d).find(e => e.repeatId === rid);
 const mealName = id => (foodMeals().find(m => m.id === id) || {name: "No meal"}).name;
@@ -1446,13 +1500,14 @@ function togglePlanned(d, rid){
 }
 function plannedRows(d, indent = 48){
   return plannedFor(d).map(r => { const on = !!eatenRepeat(d, r.id);
-    return `<label class="row ${on ? "done" : ""}" style="padding-left:${indent}px;min-height:44px"><input type="checkbox" class="chk" data-plan="${r.id}" ${on ? "checked" : ""}><div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round(r.kcal * (r.qty || 1))} cal</div></div></label>`; }).join("");
+    return `<label class="row ${on ? "done" : ""}" style="padding-left:${indent}px;min-height:44px"><input type="checkbox" class="chk" data-plan="${r.id}" ${on ? "checked" : ""}><div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round((+r.kcal || 0) * (r.qty || 1))} cal</div></div></label>`; }).join("");
 }
 function viewRepeats(){
   const rs = repeats();
   return `<div style="margin-top:14px"><button class="btn pri" data-act="new-repeat">New repeat</button></div>
   <div class="sub" style="margin-top:10px">Foods you eat on set days. They show on Today as a checklist, and checking one off logs it here.</div>
-  <div class="card" style="margin-top:12px">${rs.length ? rs.map(r => `<div class="row tap" data-repeat="${r.id}"><div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round(r.kcal * (r.qty || 1))} cal · P ${Math.round(r.p * (r.qty || 1))} · C ${Math.round(r.c * (r.qty || 1))} · F ${Math.round(r.f * (r.qty || 1))}</div><div class="dls">${dayLetters(r.days || [])}</div></div><span class="sub">›</span></div>`).join("") : `<div class="empty">No repeats yet.</div>`}</div>`;
+  ${rs.length ? [...foodMeals(), {id: "", name: "No meal"}].map(m => { const grp = rs.filter(r => m.id ? r.meal === m.id : !hasMeal(r.meal)); if (!grp.length) return "";
+    return `${foodMeals().length ? `<h2>${esc(m.name)}</h2>` : ""}<div class="card" style="margin-top:${foodMeals().length ? 0 : 12}px" data-reorder="repeats">${grp.map(r => `<div class="row tap" data-repeat="${r.id}" data-oid="${r.id}">${grp.length > 1 ? GRIP : ""}<div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round((+r.kcal || 0) * (r.qty || 1))} cal · P ${Math.round((+r.p || 0) * (r.qty || 1))} · C ${Math.round((+r.c || 0) * (r.qty || 1))} · F ${Math.round((+r.f || 0) * (r.qty || 1))}</div><div class="dls">${dayLetters(r.days || [])}</div></div><span class="sub">›</span></div>`).join("")}</div>`; }).join("") : `<div class="card" style="margin-top:12px"><div class="empty">No repeats yet.</div></div>`}`;
 }
 function repeatSheet(id){
   const x = id ? items[id] : {name: "", qty: 1, meal: (foodMeals()[0] || {id: ""}).id, kcal: "", p: "", c: "", f: "", days: [1, 2, 3, 4, 5]};
@@ -1492,7 +1547,7 @@ function repeatSheet(id){
 let foodTab = "log", foodDay = null;
 const eatsOf = d => ((items["day-" + d] || {}).eats || []);
 const sumEats = es => es.reduce((a, e) => { const q = +e.qty || 1; a.kcal += (+e.kcal || 0) * q; a.p += (+e.p || 0) * q; a.c += (+e.c || 0) * q; a.f += (+e.f || 0) * q; return a; }, {kcal: 0, p: 0, c: 0, f: 0});
-const myFoods = () => all("foodItem").sort((a, b) => (b.last || 0) - (a.last || 0));
+const myFoods = () => all("foodItem").sort(byOrder((a, b) => (b.last || 0) - (a.last || 0), true));
 const r0 = v => Math.round(v);
 function foodMeals(){ return cfg().meals.list; }
 const hasMeal = id => foodMeals().some(m => m.id === id);
@@ -1525,7 +1580,7 @@ function viewFoodApp(){
   if (foodTab === "foods"){
     const fs = myFoods();
     return menu + `<div style="margin-top:14px"><button class="btn pri" data-act="food-new-item">New food</button></div>
-    <div class="card" style="margin-top:14px">${fs.length ? fs.map(x => `<div class="row tap" data-food-item="${x.id}"><div class="grow"><div class="t">${esc(x.name)}</div><div class="m">${r0(x.kcal)} cal · P ${r0(x.p)} · C ${r0(x.c)} · F ${r0(x.f)}${x.serving ? " · " + esc(x.serving) : ""}</div></div><span class="sub">›</span></div>`).join("") : `<div class="empty">No saved foods yet. Foods you log are saved here for next time.</div>`}</div>`;
+    <div class="card" style="margin-top:14px" data-reorder="foods">${fs.length ? fs.map(x => `<div class="row tap" data-food-item="${x.id}" data-oid="${x.id}">${fs.length > 1 ? GRIP : ""}<div class="grow"><div class="t">${esc(x.name)}</div><div class="m">${r0(x.kcal)} cal · P ${r0(x.p)} · C ${r0(x.c)} · F ${r0(x.f)}${x.serving ? " · " + esc(x.serving) : ""}</div></div><span class="sub">›</span></div>`).join("") : `<div class="empty">No saved foods yet. Foods you log are saved here for next time.</div>`}</div>`;
   }
   const d = foodDay || today(), es = eatsOf(d), tot = sumEats(es), r = foodCalc();
   const left = r ? r.target - tot.kcal : null;
@@ -1539,7 +1594,7 @@ function viewFoodApp(){
   </div>
   ${[...foodMeals(), {id: "", name: foodMeals().length ? "No meal" : "Logged"}].filter(m => m.id || !foodMeals().length || es.some(e => !hasMeal(e.meal))).map(m => { const list = es.filter(e => m.id ? e.meal === m.id : !hasMeal(e.meal)); const st = sumEats(list);
     return `<h2>${esc(m.name)}<span class="sp"></span>${list.length ? `<span class="sub" style="font-family:var(--sans);text-transform:none;letter-spacing:0">${r0(st.kcal)} cal</span>` : ""}<button class="link" data-food-add="${esc(m.id || "none")}">+ Add</button></h2>
-    ${list.length ? `<div class="card">${list.map(e => `<div class="row"><div class="grow tap" data-food-edit="${esc(e.id)}"><div class="t">${esc(e.name)}${(+e.qty || 1) !== 1 ? ` <span class="sub">× ${e.qty}</span>` : ""}${e.repeatId ? ` <span class="sub">↻</span>` : ""}</div><div class="m">${r0(e.kcal * (e.qty || 1))} cal · P ${r0(e.p * (e.qty || 1))} · C ${r0(e.c * (e.qty || 1))} · F ${r0(e.f * (e.qty || 1))}</div></div><button class="ghost" data-food-del="${esc(e.id)}" aria-label="Remove">✕</button></div>`).join("")}</div>` : ""}`; }).join("")}`;
+    ${list.length ? `<div class="card" data-reorder="eats:${d}">${list.map(e => `<div class="row" data-oid="${esc(e.id)}">${list.length > 1 ? GRIP : ""}<div class="grow tap" data-food-edit="${esc(e.id)}"><div class="t">${esc(e.name)}${(+e.qty || 1) !== 1 ? ` <span class="sub">× ${e.qty}</span>` : ""}${e.repeatId ? ` <span class="sub">↻</span>` : ""}</div><div class="m">${r0(e.kcal * (e.qty || 1))} cal · P ${r0(e.p * (e.qty || 1))} · C ${r0(e.c * (e.qty || 1))} · F ${r0(e.f * (e.qty || 1))}</div></div><button class="ghost" data-food-del="${esc(e.id)}" aria-label="Remove">✕</button></div>`).join("")}</div>` : ""}`; }).join("")}`;
 }
 function foodEntrySheet(meal, editId){
   const d = foodDay || today(), es = eatsOf(d), cur = editId ? es.find(e => e.id === editId) : null;
@@ -1782,7 +1837,7 @@ function viewSettings(){
   <h2>Meal times</h2>
   <div class="sub" style="margin:-4px 0 10px">Sections in the food log and for your repeat foods.</div>
   <div class="card">
-    ${c.meals.list.map((m, i) => `<div class="row"><input class="inl" data-meal-name="${esc(m.id)}" value="${esc(m.name)}" aria-label="Meal name"><button type="button" class="ghost" data-meal-up="${esc(m.id)}" ${i===0?"disabled":""} aria-label="Move up">↑</button><button type="button" class="ghost" data-meal-del="${esc(m.id)}" aria-label="Remove">✕</button></div>`).join("")}
+    <div data-reorder="meals">${c.meals.list.map(m => `<div class="row" data-oid="${esc(m.id)}">${c.meals.list.length > 1 ? GRIP : ""}<input class="inl" data-meal-name="${esc(m.id)}" value="${esc(m.name)}" aria-label="Meal name"><button type="button" class="ghost" data-meal-del="${esc(m.id)}" aria-label="Remove">✕</button></div>`).join("")}</div>
     <form class="row" data-form="newmeal"><input class="inl" id="new-meal" placeholder="New meal" autocomplete="off"><button class="btn sm">Add</button></form>
   </div>
 
@@ -1794,7 +1849,7 @@ function viewSettings(){
 
   <h2>Daily habits</h2>
   <div class="card">
-    ${hs.map((h,i) => `<div class="row"><input class="inl" data-hab-title="${h.id}" value="${esc(h.title)}" aria-label="Habit"><button type="button" class="ghost" data-hab-up="${h.id}" ${i===0?"disabled":""} aria-label="Move up">↑</button><button type="button" class="ghost" data-hab-del="${h.id}" aria-label="Remove">✕</button></div>`).join("")}
+    <div data-reorder="habits">${hs.map(h => `<div class="row" data-oid="${h.id}">${hs.length > 1 ? GRIP : ""}<input class="inl" data-hab-title="${h.id}" value="${esc(h.title)}" aria-label="Habit"><button type="button" class="ghost" data-hab-del="${h.id}" aria-label="Remove">✕</button></div>`).join("")}</div>
     <form class="row" data-form="newhab"><input class="inl" id="new-hab" placeholder="Add a habit…" autocomplete="off"><button class="btn sm">Add</button></form>
   </div>
 
@@ -1813,9 +1868,9 @@ function viewSettings(){
 
   <h2>Tags</h2>
   <div class="card">
-    ${tags().map(tg => `<div class="row col" style="gap:8px"><div class="rowhead"><span class="tg" style="--cc:${tagCC(tg)};--c:${tagColor(tg)};padding:3px 9px;flex:none">${esc(tg.name)}</span><input class="inl" data-tag-name="${esc(tg.id)}" value="${esc(tg.name)}" aria-label="Tag name"><button type="button" class="ghost" data-tag-del="${esc(tg.id)}" aria-label="Remove">✕</button></div>
+    <div data-reorder="tags">${tags().map((tg, _, A) => `<div class="row col" style="gap:8px" data-oid="${esc(tg.id)}"><div class="rowhead">${A.length > 1 ? GRIP : ""}<span class="tg" style="--cc:${tagCC(tg)};--c:${tagColor(tg)};padding:3px 9px;flex:none">${esc(tg.name)}</span><input class="inl" data-tag-name="${esc(tg.id)}" value="${esc(tg.name)}" aria-label="Tag name"><button type="button" class="ghost" data-tag-del="${esc(tg.id)}" aria-label="Remove">✕</button></div>
       <div class="rowhead"><span class="sub" style="flex:1">Category & color</span><select class="sel" data-tag-cat="${esc(tg.id)}" aria-label="Category">${[["work","Work"],["life","Life"],["both","Both"]].map(([k,l]) => `<option value="${k}" ${tg.cat===k?"selected":""}>${l}</option>`).join("")}</select>
-      <select class="sel" data-tag-color="${esc(tg.id)}" aria-label="Tag color">${PAL.map((c, i) => `<option value="${i}" ${i===(tg.c||0)?"selected":""}>${PALN[i]}</option>`).join("")}</select></div></div>`).join("") || `<div class="empty">No tags yet.</div>`}
+      <select class="sel" data-tag-color="${esc(tg.id)}" aria-label="Tag color">${PAL.map((c, i) => `<option value="${i}" ${i===(tg.c||0)?"selected":""}>${PALN[i]}</option>`).join("")}</select></div></div>`).join("") || `<div class="empty">No tags yet.</div>`}</div>
     <form class="row" data-form="newtag"><input class="inl" id="new-tag" placeholder="New tag…" autocomplete="off"><select class="sel" id="new-tag-cat" aria-label="Category"><option value="work">Work</option><option value="life" selected>Life</option><option value="both">Both</option></select><button class="btn sm">Add</button></form>
   </div>
 
