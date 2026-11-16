@@ -2654,24 +2654,24 @@ function petGuess(dir){
 function petScreen(P, frame){
   const r = [];
   const dark = !P.lights;
-  if (P.dead){ r.push(paintGrid(SPR.grave.split("\n"), 16, 15)); }
+  if (P.dead){ r.push(dIcon("grave", 16, 14.5)); }
   else if (petGame){
     const lk = petGame.look, G = petGrid(P), h = G.length / (G.k || 1);
     r.push(paintGrid(G, 12, 24 - h, {flip: lk === "l", genes: P.genes}));
-    if (petGame.res === "hit") r.push(sprRects("heart", 40, 1));
+    if (petGame.res === "hit") r.push(dIcon("heart", 40, 1));
   } else if (P.stage === "egg"){
     { const E = petGrid(P), k = E.k || 1; r.push(paintGrid(E, 12 + (frame % 2), 24 - E.length / k, {genes: P.genes})); }
   } else {
     const G = petGrid(P), h = G.length / (G.k || 1), w = G[0].length / (G.k || 1);
     const A = petAnim && petAnim.until > Date.now() ? petAnim.kind : null;
     let x = P.asleep ? 12 : A ? 16 : petX, y = 24 - h - (!P.asleep && frame % 2 && !A ? 1 : 0);
-    if (A === "meal" || A === "snack"){ const f = Math.floor((petAnim.until - Date.now()) / 400); r.push(sprRects(A, 4, 24 - sprH(A) - 1)); if (f % 2) y -= 1; }
+    if (A === "meal" || A === "snack"){ const f = Math.floor((petAnim.until - Date.now()) / 400); r.push(dIcon(A, 4, 24 - 7)); if (f % 2) y -= 1; }
     if (A === "no"){ x = 12 + (frame % 2 ? 1 : -1); }
     r.push(paintGrid(G, Math.max(0, Math.min(48 - w, x)), y, {flip: !P.asleep && !A && petDir < 0, sleep: P.asleep, genes: P.genes}));
-    if (P.asleep) r.push(sprRects("z", 1, 1 + (frame % 2)));
-    if (P.sick) r.push(sprRects("skull", 0, 0));
+    if (P.asleep){ r.push(dIcon("z", 2, 1.5 + (frame % 2) * .6)); r.push(`<g transform="translate(5.5 -1) scale(.7)">${dIcon("z", 2, 1.5)}</g>`); }
+    if (P.sick) r.push(dIcon("skull", .5, .5));
     if (A === "scold") r.push(`<rect x="3" y="1" width="1" height="5"/><rect x="3" y="7" width="1" height="1"/>`);
-    if (A !== "clean"){ const PP = [[40, 17], [40, 9], [32, 17], [32, 9]]; for (let i = 0; i < P.poops; i++) r.push(sprRects("poop", PP[i][0], PP[i][1])); }
+    if (A !== "clean"){ const PP = [[40, 17], [40, 9], [32, 17], [32, 9]]; for (let i = 0; i < P.poops; i++) r.push(dIcon("poop", PP[i][0], PP[i][1] + .3)); }
     if (A === "clean"){ const f = 1 - (petAnim.until - Date.now()) / 1600; r.push(`<rect x="${Math.round(48 - f * 48)}" y="0" width="1" height="24"/>`); }
   }
   return `<svg viewBox="0 0 48 24" shape-rendering="crispEdges" class="petsvg ${dark ? "dark" : ""}" aria-hidden="true"><g>${r.join("")}</g></svg>`;
@@ -3146,6 +3146,7 @@ function paintHi(rows, ox, oy, flip, genes){
   return `<image href="${url}" x="${flip ? -(ox + s) : ox}" y="${oy}" width="${s}" height="${s}" ${flip ? `transform="scale(-1,1)"` : ""} style="image-rendering:auto"/>`;
 }
 function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {}){
+  if (rows.doodle) return rows.doodle(ox, oy, flip);
   if ((rows.k || 1) > 4 && typeof document !== "undefined") return paintHi(rows, ox, oy, flip, genes);
   const width = rows[0].length, kk = rows.k || 1, sc = 1 / kk;
   let x0 = 999, x1 = -1, y0 = 999, y1 = -1;
@@ -3195,14 +3196,266 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
 }
 const P_TIER = {pip: 2, tuft: 2, sprout: 2, lump: 4, bloom: 1, fern: 2, pebble: 3, mossy: 4, grub: 5};
 function petGrid(P){
-  if (P.dead) return SPR.grave.split("\n");
-  if (P.stage === "egg") return P.genes ? eggGrid(P.genes) : SPR.egg.split("\n");
+  if (P.dead){ const rows = Array(10).fill(".".repeat(16)); rows.doodle = (ox, oy) => dIcon("grave", ox, oy); return rows; }
+  if (P.stage === "egg") return P.genes ? doodleGrid(P.genes, "egg", 2, false) : SPR.egg.split("\n");
   if (!P.genes) return SPR[P.form].split("\n");
-  return creatureGrid(P.genes, P.stage, P_TIER[P.form] || 2, !!P.asleep);
+  return doodleGrid(P.genes, P.stage, P_TIER[P.form] || 2, !!P.asleep);
 }
 function petMini(P, cls = "petmini"){
   const g = petGrid(P), k = g.k || 1, w = g[0].length / k, h = g.length / k;
   return `<svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" class="${cls}" aria-hidden="true">${paintGrid(g, 0, 0, {sleep: !!P.asleep, genes: P.dead ? null : P.genes})}</svg>`;
+}
+/* ---------- Doodle renderer: hand-drawn pets ---------- */
+const DINK = "#2b2230";
+let DID = 0;
+function dRng(seed){ let s = (seed >>> 0) || 1; return () => { s = Math.imul(s ^ (s >>> 15), 2246822507); s = Math.imul(s ^ (s >>> 13), 3266489909); s ^= s >>> 16; return (s >>> 0) / 4294967296; }; }
+const f2 = v => +v.toFixed(2);
+function smoothClosed(p){ const n = p.length; let d = `M${f2(p[0][0])} ${f2(p[0][1])}`;
+  for (let i = 0; i < n; i++){ const p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
+    d += `C${f2(p1[0] + (p2[0] - p0[0]) / 6)} ${f2(p1[1] + (p2[1] - p0[1]) / 6)} ${f2(p2[0] - (p3[0] - p1[0]) / 6)} ${f2(p2[1] - (p3[1] - p1[1]) / 6)} ${f2(p2[0])} ${f2(p2[1])}`; }
+  return d + "Z"; }
+function smoothOpen(p){ const n = p.length; if (n < 2) return ""; let d = `M${f2(p[0][0])} ${f2(p[0][1])}`;
+  for (let i = 0; i < n - 1; i++){ const p0 = p[Math.max(0, i - 1)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(n - 1, i + 2)];
+    d += `C${f2(p1[0] + (p2[0] - p0[0]) / 6)} ${f2(p1[1] + (p2[1] - p0[1]) / 6)} ${f2(p2[0] - (p3[0] - p1[0]) / 6)} ${f2(p2[1] - (p3[1] - p1[1]) / 6)} ${f2(p2[0])} ${f2(p2[1])}`; }
+  return d; }
+class Doodle {
+  constructor(seed){ this.r = dRng(seed); this.out = []; this.lastBox = null; }
+  j(a){ return (this.r() - .5) * 2 * a; }
+  ellPts(cx, cy, rx, ry, rot = 0, wob = .045){ const n = Math.max(12, Math.round((rx + ry) * 3)), a = rot * Math.PI / 180, ph = this.r() * 6.28, pts = [];
+    for (let i = 0; i < n; i++){ const t = i / n * Math.PI * 2, k = 1 + Math.sin(t * 2 + ph) * wob * .6 + this.j(wob * .5), x = Math.cos(t) * rx * k, y = Math.sin(t) * ry * k;
+      pts.push([cx + x * Math.cos(a) - y * Math.sin(a), cy + x * Math.sin(a) + y * Math.cos(a)]); } return pts; }
+  polyPts(pts, wob = .1){ const out = [];
+    pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length], L = Math.hypot(q[0] - p[0], q[1] - p[1]), n = Math.max(1, Math.round(L / 1.4));
+      for (let k = 0; k < n; k++){ const t = k / n, nx = -(q[1] - p[1]) / (L || 1), ny = (q[0] - p[0]) / (L || 1), o = k ? this.j(wob) : 0; out.push([p[0] + (q[0] - p[0]) * t + nx * o, p[1] + (q[1] - p[1]) * t + ny * o]); } });
+    return out; }
+  shapePath(s){
+    if (s.e){ const [cx, cy, rx, ry, rot] = s.e; return smoothClosed(this.ellPts(cx, cy, rx, ry, rot || 0, s.wob)); }
+    if (s.p){ const P = this.polyPts(s.p, s.wob ?? .1); if (s.sharp){ return "M" + P.map(p => `${f2(p[0])} ${f2(p[1])}`).join("L") + "Z"; } return smoothClosed(P); }
+    if (s.d) return s.d;
+    return ""; }
+  box(shapes){ let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    shapes.forEach(s => { if (s.e){ const [cx, cy, rx, ry] = s.e, m = Math.max(rx, ry) * (s.e[4] ? 1 : 0) || 0; x0 = Math.min(x0, cx - (m || rx)); x1 = Math.max(x1, cx + (m || rx)); y0 = Math.min(y0, cy - (m || ry)); y1 = Math.max(y1, cy + (m || ry)); }
+      if (s.p) s.p.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }); });
+    return {x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, rx: (x1 - x0) / 2, ry: (y1 - y0) / 2}; }
+  body(shapes, fill, {shade = true, shine = true, lw = .5, hatch = .85} = {}){
+    const paths = shapes.map(s => this.shapePath(s)), id = "dc" + (++DID), B = this.box(shapes); this.lastBox = B; this.lastPaths = paths;
+    let o = `<g>${paths.map(d => `<path d="${d}" fill="none" stroke="${DINK}" stroke-width="${f2(lw * 2 + this.j(.06))}" stroke-linejoin="round"/>`).join("")}${paths.map(d => `<path d="${d}" fill="${fill}"/>`).join("")}`;
+    if (shade){ const sc = shadeC(fill), lines = [], c0 = B.cx + B.cy + .28 * (B.rx + B.ry);
+      for (let c = c0; c < B.x1 + B.y1 + 1; c += hatch){ const jj = this.j(.2); lines.push(`M${f2(c - B.y1 - 1 + jj)} ${f2(B.y1 + 1)}L${f2(B.x1 + 1)} ${f2(c - B.x1 - 1 - jj)}`); }
+      o += `<clipPath id="${id}">${paths.map(d => `<path d="${d}"/>`).join("")}</clipPath><path d="${lines.join("")}" clip-path="url(#${id})" stroke="${sc}" stroke-width=".3" stroke-linecap="round" fill="none" opacity=".8"/>`; }
+    if (shine){ const s = shapes[shapes.length - 1].e ? shapes[shapes.length - 1] : shapes[0]; if (s.e){ const [cx, cy, rx, ry] = s.e, pts = [];
+      for (let t = 200; t <= 248; t += 8){ const a = t * Math.PI / 180; pts.push([cx + Math.cos(a) * rx * .68, cy + Math.sin(a) * ry * .68]); }
+      o += `<path d="${smoothOpen(pts)}" stroke="#fff" stroke-width=".5" stroke-linecap="round" fill="none" opacity=".9"/>`; } }
+    this.out.push(o + "</g>"); return B; }
+  fill(shapes, color, op = 1){ this.out.push(shapes.map(s => `<path d="${this.shapePath(s)}" fill="${color}" ${op < 1 ? `opacity="${op}"` : ""}/>`).join("")); }
+  line(pts, w = .42, color = DINK, op = 1){ const P = pts.map(([x, y], i) => [x + (i && i < pts.length - 1 ? this.j(.08) : 0), y + (i && i < pts.length - 1 ? this.j(.08) : 0)]);
+    this.out.push(`<path d="${smoothOpen(P)}" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" fill="none" ${op < 1 ? `opacity="${op}"` : ""}/>`); }
+  arc(cx, cy, r, a0, a1, w = .42, color = DINK){ const pts = []; for (let i = 0; i <= 8; i++){ const a = (a0 + (a1 - a0) * i / 8) * Math.PI / 180; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } this.line(pts, w, color); }
+  clipped(inner){ const id = "dk" + (++DID); this.out.push(`<clipPath id="${id}">${(this.lastPaths || []).map(d => `<path d="${d}"/>`).join("")}</clipPath><g clip-path="url(#${id})">${inner}</g>`); }
+  svg(){ return this.out.join(""); }
+}
+const EYE_D = {dot: [.8, .9], big: [1.05, 1.3], wide: [1.25, 1.1], bar: [.5, 1.2], tiny: [.5, .5]};
+function dFace(D, F, cx, top, rx, h, tier, sleep, cheekC){
+  const kind = sleep ? "closed" : tier === 5 ? "sleepy" : F.eye, [erx, ery] = EYE_D[kind] || [1, 1];
+  const ey = top + F.ey * h + (EYE_D[kind] ? ery : .8), side = F.view === "left" ? -1 : F.view === "right" ? 1 : 0;
+  const xs = side ? [cx + side * F.gap * rx] : [cx - F.gap * rx, cx + F.gap * rx];
+  xs.forEach(ex => {
+    if (kind === "happy") D.arc(ex, ey + .55, 1, 200, 340, .5);
+    else if (kind === "sleepy" || kind === "closed") D.arc(ex, ey - .6, 1, 25, 155, .5);
+    else { D.fill([{e: [ex, ey, erx, ery], wob: .03}], DINK); if (kind !== "tiny"){ D.fill([{e: [ex - erx * .32, ey - ery * .38, erx * .34, erx * .34], wob: 0}], "#fff"); } }
+    if (F.cheeks){ const cxx = side ? ex - side * (erx + .9) : ex + (ex < cx ? -1 : 1) * (erx + .8), cy2 = ey + ery + .6;
+      for (let i = -1; i <= 1; i++) D.line([[cxx + i * .45 - .25, cy2 + .3], [cxx + i * .45 + .25, cy2 - .3]], .3, cheekC); }
+  });
+  const my = ey + ery + (F.mgap ?? 1) * .5 + .4, mx = side ? cx + side * rx * .58 : cx;
+  switch (F.mouth){
+    case "smile": D.arc(mx, my - .7, 1.05, 30, 150, .45); break;
+    case "small": D.arc(mx, my - .5, .65, 35, 145, .42); break;
+    case "line": D.line([[mx - .7, my], [mx + .7, my + .1]], .42); break;
+    case "o": D.body([{e: [mx, my + .3, .7, .8], wob: .05}], "#f08a9a", {shade: false, shine: false, lw: .22}); break;
+    case "grin": { const d = `M${f2(mx - 1.5)} ${f2(my - .2)}Q${f2(mx)} ${f2(my - .5)} ${f2(mx + 1.5)} ${f2(my - .2)}Q${f2(mx + 1.2)} ${f2(my + 2)} ${f2(mx)} ${f2(my + 1.9)}Q${f2(mx - 1.2)} ${f2(my + 2)} ${f2(mx - 1.5)} ${f2(my - .2)}Z`;
+      D.out.push(`<path d="${d}" fill="#f08a9a" stroke="${DINK}" stroke-width=".42" stroke-linejoin="round"/>`); break; }
+    case "cat": D.arc(mx - .58, my - .45, .58, 15, 165, .4); D.arc(mx + .58, my - .45, .58, 15, 165, .4); break;
+    case "tongue": D.fill([{e: [mx + .2, my + .7, .5, .55], wob: .05}], "#f08a9a"); D.arc(mx, my - .7, 1.05, 30, 150, .45); break;
+    case "teeth": D.out.push(`<path d="M${f2(mx - .55)} ${f2(my + .1)}h1.1v.95h-1.1z" fill="#fff" stroke="${DINK}" stroke-width=".3"/><path d="M${f2(mx)} ${f2(my + .1)}v.95" stroke="${DINK}" stroke-width=".2"/>`); D.arc(mx, my - .55, .85, 35, 145, .42); break;
+  }
+  return {eyeBottom: ey + ery};
+}
+function dFeet(D, G, f, bottom, col){
+  const F2 = G.feet === "stubby" ? [[4, .9, 2.8, 2.1]] : G.feet === "tiny" ? [[3, .7, 1.9, 1.6]] : G.feet === "long" ? [[3.4, 1.6, 2, 2.9]] : [];
+  F2.forEach(([dx, dy, rxx, ryy]) => [-1, 1].forEach(sd => D.body([{e: [12 + sd * dx * f, bottom + dy, rxx * f + .25, ryy]}], col, {shine: false})));
+}
+function dArms(D, col){ const B = D.lastBox; if (!B) return; const ay = B.cy + B.ry * .2;
+  D.body([{e: [B.x0 - .2, ay, 1.2, 1.5, -20]}], col, {shine: false, shade: false}); D.body([{e: [B.x1 + .2, ay, 1.2, 1.5, 20]}], col, {shine: false, shade: false}); }
+function dStar(D, cx, cy, r, col = "#ffd45e"){ const pts = []; for (let i = 0; i < 10; i++){ const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * .48 : r; pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]); } D.body([{p: pts, sharp: true, wob: .05}], col, {shade: false, shine: false, lw: .35}); }
+function doodlePlant(D, G, stage, tier, f, C){
+  const body = G.pbody, v = stage === "baby" ? "sprout" : G.pvar, capH = v === "mushroom" ? 2 : v === "bloom" ? 8 : v === "sprout" ? 6 : 2;
+  const bottom = (G.feet === "none" || body === "pot") ? 23 : 21.2; let rx, ry, cy, top;
+  if (body !== "pot" && G.feet !== "none") dFeet(D, {...G, feet: G.feet === "long" ? "stubby" : G.feet}, f, bottom, C.c);
+  if (body === "cactus"){
+    const rw = 6.2 * f + .5, H = Math.min(16 * f + 1, bottom - capH - .5); top = bottom - H; rx = rw; ry = H / 2; cy = top + H / 2;
+    if (stage !== "baby"){ const ax = 12 - rw - 1.9 * f, ay = top + H * .3; D.body([{p: [[ax - 1.6 * f, ay + 4.6 * f], [ax - 1.6 * f, ay + 1.2], [ax, ay - 1.4 * f], [ax + 1.6 * f, ay + 1.2], [ax + 1.6 * f, ay + 3 * f], [12 - rw + 1, ay + 3 * f], [12 - rw + 1, ay + 5.3 * f]], wob: .08}], C.c, {shine: false});
+      D.body([{e: [12 + rw + .4, top + H * .66, 1.5 * f + .25, 1.3 * f + .25]}], C.c, {shine: false, shade: false}); }
+    D.body([{p: [[12 - rw, bottom - 1], [12 - rw, top + rw * .9], [12 - rw * .7, top + rw * .25], [12, top], [12 + rw * .7, top + rw * .25], [12 + rw, top + rw * .9], [12 + rw, bottom - 1], [12, bottom]], wob: .1}], C.c);
+    [12 - rw * .45, 12 + rw * .45].forEach(x => D.line([[x, top + 2.6], [x + D.j(.2), cy], [x, bottom - 2]], .28, shadeC(C.c)));
+  } else if (body === "pot"){
+    rx = 8.4 * f + .4; ry = 6.4 * f + .3; const potH = 6 * f + 1, potTop = bottom - potH; ry = Math.min(ry, (potTop - capH) / 1.55 + .7); cy = potTop - ry * .55; top = cy - ry;
+    D.body([{e: [12, cy, rx, ry]}], C.c);
+    const pw = rx * .95; D.body([{p: [[12 - pw, potTop], [12 + pw, potTop], [12 + pw * .78 + .6, bottom], [12 - pw * .78 + .6, bottom]], wob: .08, sharp: true}], C.pc, {shine: false});
+    D.body([{p: [[12 - pw - 1, potTop - 1.4], [12 + pw + 1, potTop - .6], [12 + pw + 1, potTop + 1.6], [12 - pw - 1, potTop + 1.1]], wob: .06, sharp: true}], C.pc, {shine: false, shade: false});
+  } else {
+    rx = 9 * f + .4; ry = 7.2 * f + .3; cy = bottom - ry; top = cy - ry * 1.15;
+    if (stage !== "baby") D.line([[12 + rx * .5, cy + ry * .85], [12 + rx * .95, cy + ry * .95], [12 + rx * 1.15, cy + ry * .7], [12 + rx * 1.05, cy + ry * .5]], .5, DINK);
+    D.body([{e: [11.6, cy, rx, ry]}, {e: [12.4, cy - ry * .78, rx * .42, ry * .5]}], C.c);
+  }
+  const tY = top;
+  if (v === "sprout"){ D.line([[12.1, tY + .6], [12.2, tY - 2.6]], .42); D.body([{e: [9.3, tY - 3.4, 3.2 * Math.max(f, .7), 1.6, -22]}], "#8fd07a", {shine: false, hatch: .7}); D.body([{e: [14.8, tY - 2.7, 2.4 * Math.max(f, .7), 1.3, 24]}], "#8fd07a", {shine: false, hatch: .7});
+    D.line([[7.4, tY - 2.6], [11.4, tY - 3.9]], .25, "#5f9e55"); }
+  if (v === "bloom"){ const fx = 13.6, fy = tY - 5.2; D.line([[12.4, tY + .6], [13.1, tY - 2], [fx, fy + 1]], .42); D.body([{e: [14.8, tY - 1.6, 1.7, .9, 30]}], "#8fd07a", {shine: false, shade: false});
+    [0, 72, 144, 216, 288].forEach(a => { const r2 = (a - 90) * Math.PI / 180; D.body([{e: [fx + Math.cos(r2) * 1.7, fy + Math.sin(r2) * 1.7, 1.35, 1.35]}], C.pc, {shine: false, shade: false, lw: .35}); });
+    D.body([{e: [fx, fy, .95, .95]}], "#ffd45e", {shine: false, shade: false, lw: .3}); }
+  if (v === "spiky"){ const pcx = body === "bulb" ? 11.6 : 12; [200, 228, 255, 285, 312, 340, 165, 15].forEach(a => { const r2 = a * Math.PI / 180, x0 = pcx + Math.cos(r2) * (rx + .3), y0 = cy + Math.sin(r2) * ry * (body === "cactus" ? 1 : 1.02); if (y0 > cy + ry * .45 || y0 < top - .5) return; D.line([[x0, y0], [x0 + Math.cos(r2) * .9, y0 + Math.sin(r2) * .9]], .3); });
+    [0, 120, 240].forEach(a => { const r2 = (a - 90) * Math.PI / 180; D.body([{e: [12.2 + Math.cos(r2) * 1, tY - .8 + Math.sin(r2) * 1, .85, .85]}], C.pc, {shine: false, shade: false, lw: .3}); }); D.fill([{e: [12.2, tY - .8, .55, .55]}], "#ffd45e"); }
+  if (v === "mushroom"){ const cr = rx + 2.2, h = 4.6 * f + .8, cx2 = 12.8, base = top + 2.6, pts = [];
+    for (let i = 0; i <= 14; i++){ const a = Math.PI + i / 14 * Math.PI; pts.push([cx2 + Math.cos(a) * cr, base + Math.sin(a) * h]); }
+    pts.push([cx2 + cr * .9, base + .5], [cx2 - cr * .9, base + .5]); D.body([{p: pts, wob: .05}], C.pc);
+    [[cx2 - cr * .45, base - h * .55, .8], [cx2 + cr * .05, base - h * .8, .6], [cx2 + cr * .5, base - h * .35, .55]].forEach(([x, y, r]) => D.fill([{e: [x, y, r, r * .85], wob: .08}], "#fff")); }
+  if (body === "bulb") dFace(D, {eye: "dot", gap: .42, ey: .52, mouth: "smile", cheeks: true}, 11.6, top, rx, bottom - top, tier, G._sleep, C.ch);
+  else if (body === "cactus") dFace(D, {eye: "dot", gap: .3, ey: .18, mouth: "small", cheeks: true}, 12, top, rx, bottom - top, tier, G._sleep, C.ch);
+  else dFace(D, {eye: "wide", gap: .38, ey: .36, mouth: "none", cheeks: true}, 12, top, rx, 2 * ry, tier, G._sleep, C.ch);
+  if (stage === "adult" && tier === 1) dStar(D, 2.6, Math.max(2.4, top + 1), 2);
+}
+function doodleGem(D, G, stage, tier, f, C){
+  const body = G.gbody, v = stage === "baby" ? "none" : G.gvar, bottom = G.feet === "none" ? 23 : 21.2;
+  if (G.feet !== "none") dFeet(D, {...G, feet: "tiny"}, f, bottom, C.c);
+  const spikesH = v === "spikes" ? 6.5 * f : 0, rw = 5.6 * f + .6, H = Math.min(16.5 * f, bottom - spikesH - 1), tip = 4 * f;
+  let rx, ry, cy, top;
+  if (body === "crystal"){ top = bottom - H; rx = rw; ry = H / 2; cy = top + H / 2 + tip * .4; }
+  else if (body === "cut"){ rx = 8.6 * f + .4; ry = Math.min(7.4 * f + .3, (bottom - spikesH - 1) / 2); cy = bottom - ry; top = cy - ry; }
+  else { rx = 9.4 * f + .4; ry = Math.min(7 * f + .3, (bottom - spikesH - 1) / 2.1); cy = bottom - ry; top = cy - ry * 1.05; }
+  const facet = pts => D.line(pts, .3, shadeC(C.c));
+  if (v === "spikes") [[12 - 4.6 * f, 4.2 * f], [12 + .6, 7 * f], [12 + 4.6 * f, 3.2 * f]].forEach(([cx, h]) => { const t = top + 1.6 - h, w = 2.1 * f + .5;
+    D.body([{p: [[cx, t], [cx + w, t + h * .5], [cx + w, top + 3], [cx - w, top + 3], [cx - w, t + h * .5]], sharp: true, wob: .05}], mixC(C.c, "#ffffff", .25), {shine: false, hatch: .7}); facet([[cx, t + .3], [cx, top + 2.5]]); });
+  if (body === "crystal"){
+    const sx = 12 - rw - 1.6 * f, st = top + H * .38; D.body([{p: [[sx - .6, st], [12 - rw * .2, st + H * .2], [12 - rw * .2, bottom - .6], [sx + .8, bottom - .6], [sx - 1.4 * f, st + H * .25]], sharp: true, wob: .05}], C.c, {shine: false});
+    D.body([{p: [[12.9, top], [12 + rw, top + tip * .8], [12 + rw, bottom - .6], [12 + rw - 1.4, bottom], [12 - rw + 1.4, bottom], [12 - rw, bottom - .6], [12 - rw, top + tip]], sharp: true, wob: .06}], C.c, {shine: false});
+    facet([[12.9, top + .4], [12.2, top + tip + .4], [12.2, bottom - .8]]); facet([[12 - rw + .4, top + tip + .2], [12.2, top + tip + .4]]); facet([[12 + rw - .4, top + tip * .8 + .2], [12.2, top + tip + .4]]);
+  } else if (body === "cut"){
+    const c1 = 3.8 * f + .3, c2 = 1.6 * f + .3, c3 = 3 * f + .3, c4 = 2 * f + .3;
+    D.body([{p: [[12 - rx + c1, top], [12 + rx - c2, top + .4], [12 + rx, top + c2 + .4], [12 + rx, cy + ry - c3], [12 + rx - c3, cy + ry], [12 - rx + c4, cy + ry], [12 - rx, cy + ry - c4], [12 - rx, top + c1]], sharp: true, wob: .06}], C.c, {shine: false});
+    const tx0 = 11.2 - rx * .52, tx1 = 11.2 + rx * .52, ty0 = cy - .6 - ry * .46, ty1 = cy - .6 + ry * .46;
+    D.fill([{p: [[tx0, ty0], [tx1, ty0], [tx1, ty1], [tx0, ty1]], sharp: true, wob: .04}], mixC(C.c, "#ffffff", .35));
+    facet([[tx0, ty0], [tx1, ty0], [tx1, ty1], [tx0, ty1], [tx0, ty0]]); facet([[12 - rx + c1, top + .2], [tx0, ty0]]); facet([[12 + rx - c2, top + .5], [tx1, ty0]]); facet([[12 + rx - c3, cy + ry - .2], [tx1, ty1]]); facet([[12 - rx + c4, cy + ry - .2], [tx0, ty1]]);
+  } else {
+    D.body([{e: [12, cy, rx, ry], wob: .07}], C.c);
+  }
+  if (v === "ore"){ const r = hashR(G.ps); for (let i = 0; i < 6; i++){ const x = 12 + (r() - .5) * rx * 1.3, y = cy + (r() - .2) * ry * .8; D.fill([{e: [x, y, .55, .45], wob: .15}], C.pc); } }
+  if (v === "geode"){ const band = top + 3.4 * f, pts = []; for (let x = 12 - rx - .5; x <= 12 + rx + .5; x += 1) pts.push([x, band + (Math.round(x) % 2 ? -.8 : .2)]);
+    const crown = [[12 - rx - .5, top - 1], [12 + rx + .5, top - 1], ...pts.slice().reverse()]; const save = D.out.length;
+    D.fill([{p: crown, sharp: true, wob: 0}], C.pc); for (let x = 12 - rx + .5; x < 12 + rx; x += 1.6) D.line([[x, band - .3], [x + .5, top + .6]], .25, "#fff", .8); D.line(pts, .45);
+    const inner = D.out.splice(save).join(""); D.clipped(inner); }
+  if (v === "moss"){ const pts = [[12 - rx - .4, top - 1]]; for (let x = 12 - rx - .4; x <= 12 + rx + .4; x += .8) pts.push([x, top + 2.4 * f + (Math.sin(x * 1.3) + 1) * .8 + (Math.round(x) % 5 === 2 ? 1.3 : 0)]); pts.push([12 + rx + .4, top - 1]);
+    const save = D.out.length; D.fill([{p: pts, wob: .05}], "#8fd07a"); D.line(pts.slice(1, -1), .4, "#5f9e55"); D.clipped(D.out.splice(save).join("")); }
+  if (body === "cut") dFace(D, {eye: "big", gap: .36, ey: .28, mouth: "grin", cheeks: true}, 11.4, top, rx, 2 * ry, tier, G._sleep, C.ch);
+  else if (body === "pebble") dFace(D, {view: "right", eye: "big", gap: .42, ey: .28, mouth: "small", cheeks: true}, 12.6, top, rx, 2 * ry, tier, G._sleep, C.ch);
+  else dFace(D, {eye: "bar", gap: .34, ey: .38, mouth: "small", cheeks: true}, 12, top, rw, bottom - top, tier, G._sleep, C.ch);
+  if (stage === "adult" && tier === 1) dStar(D, 2.6, Math.max(2.4, top + 1), 2);
+}
+function doodleAnimal(D, G, stage, tier, f, C){
+  const v = G.avar || "cat", body = stage === "baby" ? "sit" : (G.abody || "sit"), bottom = 23;
+  const earH = v === "bunny" ? 7 * f : v === "cat" ? 3.5 * f : v === "bear" ? 1.5 : 1;
+  let hx, hy, rhx, rhy, bx, by, rbx, rby;
+  if (body === "loaf"){ rbx = 9.6 * f + .4; rby = 4.4 * f + .4; bx = 13.4; by = bottom - rby - .4; rhx = 6.2 * f + .6; rhy = 5.4 * f + .5; hx = 8.6; hy = by - rby * .55; }
+  else if (body === "stand"){ rhx = 7.4 * f + .5; rhy = 6.2 * f + .4; rbx = 4.8 * f + .5; rby = 4.4 * f + .4; bx = 12; by = bottom - 2.2 * f - rby; hx = 11.6; hy = by - rby - rhy * .62; }
+  else { rbx = 6 * f + .5; rby = 5 * f + .4; bx = 12.4; by = bottom - rby - .3; rhx = 7 * f + .5; rhy = 6 * f + .4; hx = 11.4; hy = by - rby * .7 - rhy * .55; }
+  const over = earH - (hy - rhy); if (over > 0){ hy += over; by += over * .3; }
+  const ht = hy - rhy, tx = bx + rbx * .92, ty = by + rby * .2, c = C.c;
+  if (v === "cat") D.line([[tx - .5, ty + .5], [tx + 1.4 * f, ty - 1.6 * f], [tx + 2.2 * f, ty - 3.6 * f], [tx + 1.6 * f, ty - 5.6 * f], [tx + .3, ty - 6.4 * f]], 2.6, DINK), D.line([[tx - .5, ty + .5], [tx + 1.4 * f, ty - 1.6 * f], [tx + 2.2 * f, ty - 3.6 * f], [tx + 1.6 * f, ty - 5.6 * f], [tx + .3, ty - 6.4 * f]], 1.7, c);
+  if (v === "dog") D.body([{e: [tx + 1.2, ty - 2, 1.2, 2.4, 30]}], c, {shine: false, shade: false});
+  if (v === "bunny") D.body([{e: [tx, ty + .6, 2.3 * f + .3, 2.2 * f + .3], wob: .12}], mixC(c, "#ffffff", .5), {shine: false, shade: false});
+  if (v === "bear") D.body([{e: [tx - .2, ty + 1, 1.6, 1.5]}], c, {shine: false, shade: false});
+  const ears = [];
+  if (v === "cat"){ [[-1, hx - rhx * .55, ht - 3.2 * f, 5.4 * f], [1, hx + rhx * .55 + .6, ht - 2.6 * f, 4.8 * f]].forEach(([sd, cx, tip, h]) => { ears.push(() => D.body([{p: [[cx - .2 * sd, tip], [cx + h * .72, tip + h], [cx - h * .72, tip + h]], wob: .06}], c, {shine: false, shade: false}));
+    ears.push(() => D.fill([{p: [[cx - .1 * sd, tip + 1.3], [cx + h * .35, tip + h], [cx - h * .35, tip + h]], wob: .04}], C.ch, .8)); }); }
+  if (v === "bunny"){ ears.push(() => D.body([{e: [hx - 2.6 * f, ht - 3.4 * f, 1.9 * f + .4, 4.8 * f, -6]}], c, {shine: false, shade: false}), () => D.fill([{e: [hx - 2.6 * f, ht - 3.1 * f, .8 * f + .2, 3.4 * f, -6]}], C.ch, .8),
+    () => D.body([{e: [hx + 3.4 * f, ht - 2.2 * f, 1.9 * f + .4, 3.6 * f, 35]}], c, {shine: false, shade: false})); }
+  if (v === "bear") [[hx - rhx * .72, ht + 1.2], [hx + rhx * .72, ht + 1.4]].forEach(([x, y]) => ears.push(() => D.body([{e: [x, y, 2.6 * f + .2, 2.5 * f + .2]}], c, {shine: false, shade: false}), () => D.fill([{e: [x, y + .2, 1.2 * f + .2, 1.15 * f + .2]}], C.ch, .8)));
+  if (v === "dog") ears.push(() => D.body([{e: [hx + rhx * .62, ht + .6, 2.3 * f + .3, 2.4 * f]}], C.pc, {shine: false, shade: false}));
+  ears.forEach(e => e());
+  if (body === "stand"){ D.body([{e: [bx - 2.4 * f, bottom - 1.8, 1.9 * f + .3, 2.2]}], c, {shine: false}); D.body([{e: [bx + 2.6 * f, bottom - 1.6, 1.9 * f + .3, 2]}], c, {shine: false}); }
+  D.body([{e: [bx, by, rbx, rby]}], c);
+  if (G.pattern === "belly") D.fill([{e: [bx, by + rby * .2, rbx * .55, rby * .6]}], mixC(c, "#ffffff", .5));
+  if (body === "stand"){ D.body([{e: [bx - rbx - .2, by + .4, 1.3, 2.1, 10]}], c, {shine: false, shade: false}); D.body([{e: [bx + rbx + .9, by - 2.6, 1.2, 2.3, 20]}], c, {shine: false, shade: false}); }
+  D.body([{e: [hx, hy, rhx, rhy]}], c);
+  if (G.pattern === "patch") D.fill([{e: [hx - rhx * .38, hy - rhy * .05, rhx * .32, rhy * .32, -15]}], C.pc, .9);
+  if (G.pattern === "tips" && (v === "cat" || v === "bear")) {}
+  if (G.pattern === "stripes") [-.35, 0, .35].forEach(u => D.line([[hx + u * rhx, ht + .5], [hx + u * rhx * .9, ht + 2]], .45, C.pc));
+  if (G.pattern === "spots"){ const r = hashR(G.ps); for (let i = 0; i < 3; i++) D.fill([{e: [bx + (r() - .5) * rbx * 1.2, by + (r() - .3) * rby, .7, .55], wob: .15}], C.pc, .9); }
+  if (v === "dog") D.body([{e: [hx - rhx * .92, hy - rhy * .15, 2.1 * f + .3, 3.8 * f + .2, 8]}], C.pc, {shine: false, shade: false});
+  if (v === "dog" || v === "bear") D.fill([{e: [hx, hy + rhy * .34, 3 * f + .4, 2 * f + .3]}], mixC(c, "#ffffff", .45));
+  const mouthV = {cat: "cat", dog: "tongue", bunny: "teeth", bear: "smile"}[v];
+  const FS = body === "loaf" ? {eye: "dot", gap: .42, ey: .34, mouth: mouthV, cheeks: true} : body === "stand" ? {eye: "happy", gap: .4, ey: .3, mouth: "grin", cheeks: true} : {eye: "big", gap: .4, ey: .28, mouth: mouthV, cheeks: true};
+  if (v === "dog" || v === "bear") FS.mgap = 2.2;
+  const fm = dFace(D, FS, hx, ht, rhx, 2 * rhy, tier, G._sleep, C.ch);
+  if ((v === "dog" || v === "bear") && body !== "stand") D.fill([{e: [hx, fm.eyeBottom + .55, .75, .5]}], DINK);
+  if (v === "cat") [[-1, 0], [-1, 1], [1, 0], [1, 1]].forEach(([sd, dy]) => { const yy = fm.eyeBottom + .5 + dy * .9, x0 = hx + sd * (rhx - .4); D.line([[x0, yy], [x0 + sd * 2.2, yy - .5 + dy * .5]], .28); });
+  if (body === "sit") [[bx - 2.4 * f, bottom - .9], [bx + 1.6 * f, bottom - .9]].forEach(([x, y]) => D.body([{e: [x, y, 1.9 * f + .2, 1.3]}], c, {shine: false, shade: false}));
+  if (body === "loaf") [[hx - 1.8, bottom - .8], [hx + 2.2, bottom - .8]].forEach(([x, y]) => D.body([{e: [x, y, 1.8, 1.2]}], c, {shine: false, shade: false}));
+  if (G.pattern === "socks") D.out.length && null;
+  if (stage === "adult" && tier === 1) dStar(D, 21, 2.6, 2);
+}
+function doodleRare(D, G, stage, tier, f, C){
+  const bottom = 22.4;
+  if ((G.rbody || "comet") === "comet"){
+    const rx = 6.6 * f + .5, ry = 6.2 * f + .5, cx = 9.2, cy = bottom - ry;
+    D.body([{p: [[cx + rx * .3, cy - ry * .95], [cx + rx * 2.15, cy - ry * 1.55], [cx + rx * 1.85, cy - ry * .85], [cx + rx * 2.2, cy - ry * .4], [cx + rx * .6, cy + ry * .6]], wob: .1}], C.pc, {shine: false});
+    [[1.4, -.85], [1.85, -1.2], [1.7, -.3]].forEach(([u, w]) => { const X = cx + rx * u, Y = cy + ry * w; D.line([[X - .55, Y], [X + .55, Y]], .3, "#fff"); D.line([[X, Y - .55], [X, Y + .55]], .3, "#fff"); });
+    D.body([{e: [cx, cy, rx, ry]}], C.c); dStar(D, cx, cy - ry - .5, 2.3);
+    dFace(D, {eye: "big", gap: .38, ey: .3, mouth: "o", cheeks: true}, cx, cy - ry, rx, 2 * ry, tier, G._sleep, C.ch);
+  } else {
+    const rx = 4.6 * f + .6, ry = 6 * f + .5, cx = 12, cy = bottom - ry;
+    [-1, 1].forEach(sd => { D.body([{e: [cx + sd * (rx + 3.4 * f), cy - ry * .35, 4 * f + .6, 4.6 * f + .5, sd * 12]}, {e: [cx + sd * (rx + 2.6 * f), cy + ry * .45, 2.8 * f + .5, 2.8 * f + .3]}], C.pc, {shine: false});
+      D.fill([{e: [cx + sd * (rx + 3.6 * f), cy - ry * .4, 1.6, 1.6]}], "#fff"); D.fill([{e: [cx + sd * (rx + 3.6 * f), cy - ry * .4, .8, .8]}], shadeC(C.pc)); });
+    D.body([{e: [cx, cy, rx, ry]}], C.c);
+    [-1, 1].forEach(sd => { const ty = cy - ry; D.line([[cx + sd, ty + .5], [cx + sd * 2.6, ty - 2], [cx + sd * 4.2, ty - 3.6]], .38); D.body([{e: [cx + sd * 4.4, ty - 3.8, .85, .85]}], C.pc, {shine: false, shade: false, lw: .3}); });
+    dFace(D, {eye: "dot", gap: .48, ey: .18, mouth: "small", cheeks: true}, cx, cy - ry, rx, 2 * ry, tier, G._sleep, C.ch);
+  }
+  if (stage === "adult" && tier === 1) dStar(D, 2.6, 2.6, 2);
+}
+function doodleCritter(D, G, stage, tier, f, C){
+  const dims = {round: [9.5, 7.6], tall: [8, 8.8], wide: [11, 6.4], pear: [10, 7.8], bean: [10, 8.4], drop: [9, 7.8]}[G.shape] || [9.5, 7.6];
+  const rx = dims[0] * f, ry = dims[1] * f, bottom = 21.2, cy = bottom - ry, top = cy - ry;
+  dFeet(D, {feet: "tiny"}, f, bottom, C.c); D.body([{e: [12, cy, rx, ry]}], C.c);
+  dFace(D, {eye: "big", gap: .34, ey: .32, mouth: "smile", cheeks: true}, 12, top, rx, 2 * ry, tier, G._sleep, C.ch);
+}
+function doodleEgg(D, C){ D.body([{e: [12, 13.6, 7.6, 9.8], wob: .03}], mixC(C.c, "#ffffff", .3)); [[8.6, 9.6, 1.6, 1.3], [15.2, 14.6, 2, 1.6], [9.4, 18.4, 1.2, 1], [14.4, 7.4, .9, .8]].forEach(([x, y, a, b]) => D.fill([{e: [x, y, a, b], wob: .12}], C.pc)); }
+const DG = new Map();
+function doodleGrid(genes, stage, tier, sleep){
+  const key = JSON.stringify([genes, stage, tier, sleep]); if (DG.has(key)) return DG.get(key);
+  const G = {...genes, _sleep: sleep}, f = {baby: .64, child: .8, teen: .9, adult: 1}[stage] || 1, col = colorsOf(G);
+  const C = {c: col.c, pc: col.pc, ch: CHEEK_C[G.cheek] || "#f0889a"}, D = new Doodle(((genes && genes.ps) || 7) + stage.length * 131 + (tier || 0));
+  if (stage === "egg") doodleEgg(D, C);
+  else if (G.kind === "rare") doodleRare(D, G, stage, tier, f, C);
+  else if (G.kind === "plant" && G.pbody) doodlePlant(D, G, stage, tier, f, C);
+  else if (G.kind === "gem" && G.gbody) doodleGem(D, G, stage, tier, f, C);
+  else if (G.kind === "animal" && G.abody) doodleAnimal(D, G, stage, tier, f, C);
+  else doodleCritter(D, G, stage, tier, f, C);
+  const svg = D.svg(), rows = Array(24).fill(".".repeat(24));
+  rows.doodle = (ox, oy, flip) => `<g transform="translate(${f2(ox + (flip ? 24 : 0))} ${f2(oy)})${flip ? " scale(-1 1)" : ""}" shape-rendering="geometricPrecision">${svg}</g>`;
+  DG.set(key, rows); return rows;
+}
+
+const DICON = {};
+function dIcon(k, x, y){
+  if (!DICON[k]){ const D = new Doodle(k.length * 97 + 11);
+    if (k === "poop"){ D.body([{e: [4, 5.6, 3.6, 1.5]}, {e: [4, 4, 2.7, 1.3]}, {e: [4.2, 2.6, 1.7, 1.1]}, {p: [[3.6, 1.8], [4.6, .2], [5, 1.9]], wob: .05}], "#a8794f", {shine: false, lw: .4}); D.fill([{e: [3.2, 3.8, .35, .4]}], DINK); D.fill([{e: [4.8, 3.8, .35, .4]}], DINK); }
+    if (k === "meal"){ D.body([{p: [[.6, 2.6], [7.4, 2.6], [6.4, 5.8], [1.6, 5.8]], wob: .05}], "#f0b37a", {shine: false, lw: .4}); D.body([{e: [4, 2.6, 3, 1.6]}], "#fff", {shine: false, shade: false, lw: .35}); D.line([[2.6, 1.2], [3, .2]], .3); D.line([[4.6, 1], [5, 0]], .3); }
+    if (k === "snack"){ D.body([{e: [4, 3.4, 2.2, 2]}], "#f08a9a", {shine: false, lw: .4}); D.body([{p: [[1.9, 3.4], [.2, 2], [.2, 4.8]], wob: .05}], "#f08a9a", {shine: false, shade: false, lw: .35}); D.body([{p: [[6.1, 3.4], [7.8, 2], [7.8, 4.8]], wob: .05}], "#f08a9a", {shine: false, shade: false, lw: .35}); D.line([[3.2, 2.2], [4.8, 4.6]], .3, "#fff"); }
+    if (k === "skull"){ D.body([{e: [3.5, 2.4, 3, 2.3]}], "#d9f0ff", {shine: false, shade: false, lw: .35}); D.line([[1.8, 1.6], [2.8, 2.6]], .3); D.line([[2.8, 1.6], [1.8, 2.6]], .3); D.line([[4.2, 1.6], [5.2, 2.6]], .3); D.line([[5.2, 1.6], [4.2, 2.6]], .3); D.line([[1.6, 4.4], [2.4, 3.8], [3.2, 4.4], [4, 3.8], [4.8, 4.4], [5.6, 3.8]], .3); }
+    if (k === "z"){ D.line([[.2, .4], [2.8, .4], [.2, 3.6], [2.8, 3.6]], .45); }
+    if (k === "heart"){ D.body([{d: "M3.5 5.6C1 4 .2 2.8.6 1.6 1 .4 2.6.2 3.5 1.6 4.4.2 6 .4 6.4 1.6 6.8 2.8 6 4 3.5 5.6Z"}], "#f0607a", {shine: false, shade: false, lw: .35}); }
+    if (k === "grave"){ D.body([{p: [[4, 9], [4, 2.6], [5.4, .8], [10.6, .8], [12, 2.6], [12, 9]], wob: .08}], "#c9c6bf", {shine: false, lw: .45}); D.line([[8, 2.4], [8, 6.6]], .45); D.line([[6.4, 3.8], [9.6, 3.8]], .45); D.line([[1.5, 9], [14.5, 9]], .5, "#5f9e55"); D.line([[2, 8.4], [2.6, 7.6], [3, 8.4]], .3, "#5f9e55"); D.line([[13, 8.4], [13.4, 7.4], [13.9, 8.4]], .3, "#5f9e55"); }
+    DICON[k] = D.svg(); }
+  return `<g transform="translate(${x} ${y})" shape-rendering="geometricPrecision">${DICON[k]}</g>`;
 }
 /* book: stored, partners, passed */
 const book = () => ((items.settings || {}).petBook || []);
