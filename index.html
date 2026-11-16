@@ -396,6 +396,16 @@ details > summary{list-style:none}details > summary::-webkit-details-marker{disp
 .rp-seg{display:flex}.rp-seg button{flex:1}
 .rpo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0;text-transform:none;letter-spacing:0;font:inherit}.rpo input[type=radio]{width:18px;height:18px;margin:0;flex:none}.rpo .num{width:70px;flex:none}.rpo .sel{flex:1 1 34%;min-width:110px;max-width:none;width:auto}.rpo > span{white-space:nowrap}.rp-y{display:flex;align-items:center;gap:8px;flex:1 1 40%}
 .row.planned{opacity:.78}.row.planned .t .tag{font-size:10px}
+.rings{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;margin-top:10px}
+.ring{position:relative}.ring svg{display:block;width:100%;height:100%}.ring.big{width:132px;height:132px}.ring.sm{width:100%;max-width:84px;aspect-ratio:1}
+.rtrack{fill:none;stroke:var(--line);stroke-width:9}.rfill{fill:none;stroke-width:9;stroke-linecap:round;animation:rfill .9s cubic-bezier(.2,.8,.2,1)}
+@keyframes rfill{from{stroke-dashoffset:var(--full)}}
+.rin{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.1}
+.ring.big .rin b{font:600 24px/1 var(--sans)}.ring.big .rin span{font-size:11px;color:var(--muted);margin-top:3px;max-width:80%}
+.ring.sm .rin b{font:600 15px/1 var(--sans)}.ring.sm .rin span{font-size:9.5px;color:var(--muted);margin-top:2px}
+.ring3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.rcol{display:flex;flex-direction:column;align-items:center;gap:5px}
+.rlbl{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}.rlbl i{width:8px;height:8px;border-radius:50%}
+@media (prefers-reduced-motion: reduce){.rfill{animation:none}}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
 
@@ -1732,6 +1742,17 @@ function wireMealSelect(S){
       box.querySelector("[data-nm-add]").onclick = add; box.querySelector("[data-nm-x]").onclick = () => box.remove();
       inp.onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); add(); } }; }; });
 }
+function ring(got, target, color, size, inner, sub){
+  const r = 42, C = 2 * Math.PI * r, pct = target ? Math.min(1, got / target) : 0, over = target && got > target * 1.02;
+  return `<div class="ring ${size}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="${r}" class="rtrack"/>
+    <circle cx="50" cy="50" r="${r}" class="rfill" style="stroke:${over ? "var(--warn, #d9534f)" : color};stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct)};--full:${C}" transform="rotate(-90 50 50)"/></svg>
+    <div class="rin"><b>${inner}</b><span>${sub}${over ? " · over" : ""}</span></div></div>`;
+}
+function macroRings(tot, r){
+  const M = [["Protein", tot.p, r && r.proG, "#e0785a"], ["Carbs", tot.c, r && r.carbG, "#e3ad2f"], ["Fat", tot.f, r && r.fatG, "#5f93d6"]];
+  return `<div class="rings"><div class="ringbig">${ring(tot.kcal, r && r.target, "var(--ink)", "big", r0(tot.kcal).toLocaleString(), r ? `of ${r.target.toLocaleString()} cal` : "cal eaten")}</div>
+    <div class="ring3">${M.map(([l, g, t, c]) => `<div class="rcol">${ring(g, t, c, "sm", r0(g), t ? `/ ${r0(t)}g` : "g")}<div class="rlbl"><i style="background:${c}"></i>${l}</div></div>`).join("")}</div></div>`;
+}
 function macroBar(lbl, got, target, unit){
   const pct = target ? Math.min(100, Math.round(got / target * 100)) : 0, over = target && got > target;
   return `<div class="mrow"><div class="mhead"><span>${lbl}</span><span><b>${r0(got)}</b>${target ? ` / ${r0(target)}` : ""} ${unit}${over ? " · over" : ""}</span></div><div class="gbar" style="--cc:var(--ink)"><i style="width:${pct}%"></i></div></div>`;
@@ -1752,9 +1773,8 @@ function viewFoodApp(){
   <div class="calhead" style="margin-top:14px"><div class="ttl">${esc(relDay(d))}${d === today() ? "" : " · " + esc(fmtDay(d))}</div>
     <button class="btn sm" data-foodday="-1" aria-label="Previous day">‹</button>${d !== today() ? `<button class="btn sm" data-foodday="0">Today</button>` : ""}<button class="btn sm" data-foodday="1" aria-label="Next day" ${d >= today() ? "disabled" : ""}>›</button></div>
   <div class="bcard"><div class="lbl">Calories<span class="sp"></span>${r ? (left >= 0 ? `${r0(left).toLocaleString()} left` : `${r0(-left).toLocaleString()} over`) : ""}</div>
-    <div class="big" style="margin-top:6px">${r0(tot.kcal).toLocaleString()}<small>${r ? `of ${r.target.toLocaleString()}` : "eaten"}</small></div>
-    ${r ? `<div class="gbar big-bar" style="--cc:var(--ink)"><i style="width:${Math.min(100, Math.round(tot.kcal / r.target * 100))}%"></i></div>` : `<div class="statline">Set your targets in the Targets menu to see what's left.</div>`}
-    <div style="margin-top:12px;display:grid;gap:10px">${macroBar("Protein", tot.p, r && r.proG, "g")}${macroBar("Carbs", tot.c, r && r.carbG, "g")}${macroBar("Fat", tot.f, r && r.fatG, "g")}</div>
+    ${macroRings(tot, r)}
+    ${r ? "" : `<div class="statline">Set your targets in the Targets menu to fill the rings.</div>`}
   </div>
   ${(() => { const pend = plannedFor(d).filter(r => !eatenRepeat(d, r.id)); return pend.length ? `<div class="sub" style="margin-top:14px">${pend.length} planned ${pend.length === 1 ? "food" : "foods"} to confirm. Tap the circle once you've eaten it.</div>` : ""; })()}
   ${[...foodMeals(), {id: "", name: foodMeals().length ? "No meal" : "Logged"}].filter(m => m.id || !foodMeals().length || es.some(e => !hasMeal(e.meal)) || plannedFor(d).some(r => !hasMeal(r.meal) && !eatenRepeat(d, r.id))).map(m => { const list = es.filter(e => m.id ? e.meal === m.id : !hasMeal(e.meal)); const st = sumEats(list);
@@ -2798,20 +2818,20 @@ function mixGenes(A, B, r = Math.random){
 }
 /* procedural body -> grid of chars: # outline, l fill, s shade, w shine, e eye, b cheek */
 const CG = new Map();
-const PK = 2, PN = 24 * PK;
-const kxy = k => [k & 63, k >> 6];
+const PK = 3, PN = 24 * PK;
+const kxy = k => [k & 127, k >> 7];
 const newG = () => Array.from({length: PN}, () => Array(PN).fill("."));
 function cMask(){ return new Set(); }
 function cEach(fn){ for (let y = 0; y < PN; y++) for (let x = 0; x < PN; x++) fn(x, y, (x + .5) / PK, (y + .5) / PK); }
-function cEll(m, cx, cy, rx, ry){ cEach((x, y, X, Y) => { if (((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1) m.add(y * 64 + x); }); return m; }
-function cEllR(m, cx, cy, rx, ry, deg){ const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); cEach((x, y, X, Y) => { const dx = X - cx, dy = Y - cy, u = dx * c + dy * s, v = -dx * s + dy * c; if ((u / rx) ** 2 + (v / ry) ** 2 <= 1) m.add(y * 64 + x); }); return m; }
-function cTri(m, cx, tip, h, slope = .7){ cEach((x, y, X, Y) => { if (Y >= tip && Y < tip + h && Math.abs(X - cx) <= (Y - tip + .3) * slope) m.add(y * 64 + x); }); return m; }
-function cRect(m, x0, y0, x1, y1){ cEach((x, y, X, Y) => { if (X >= x0 && X < x1 && Y >= y0 && Y < y1) m.add(y * 64 + x); }); return m; }
-function cLine(m, x0, y0, x1, y1, w){ const dx = x1 - x0, dy = y1 - y0, L = dx * dx + dy * dy || 1; cEach((x, y, X, Y) => { const t = Math.max(0, Math.min(1, ((X - x0) * dx + (Y - y0) * dy) / L)), px = x0 + t * dx - X, py = y0 + t * dy - Y; if (px * px + py * py <= (w / 2) ** 2) m.add(y * 64 + x); }); return m; }
+function cEll(m, cx, cy, rx, ry){ cEach((x, y, X, Y) => { if (((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1) m.add(y * 128 + x); }); return m; }
+function cEllR(m, cx, cy, rx, ry, deg){ const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); cEach((x, y, X, Y) => { const dx = X - cx, dy = Y - cy, u = dx * c + dy * s, v = -dx * s + dy * c; if ((u / rx) ** 2 + (v / ry) ** 2 <= 1) m.add(y * 128 + x); }); return m; }
+function cTri(m, cx, tip, h, slope = .7){ cEach((x, y, X, Y) => { if (Y >= tip && Y < tip + h && Math.abs(X - cx) <= (Y - tip + .3) * slope) m.add(y * 128 + x); }); return m; }
+function cRect(m, x0, y0, x1, y1){ cEach((x, y, X, Y) => { if (X >= x0 && X < x1 && Y >= y0 && Y < y1) m.add(y * 128 + x); }); return m; }
+function cLine(m, x0, y0, x1, y1, w){ const dx = x1 - x0, dy = y1 - y0, L = dx * dx + dy * dy || 1; cEach((x, y, X, Y) => { const t = Math.max(0, Math.min(1, ((X - x0) * dx + (Y - y0) * dy) / L)), px = x0 + t * dx - X, py = y0 + t * dy - Y; if (px * px + py * py <= (w / 2) ** 2) m.add(y * 128 + x); }); return m; }
 function cPoly(m, pts){ cEach((x, y, px, py) => { let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside; }
-  if (inside) m.add(y * 64 + x); }); return m; }
-const isEdge = (m, x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !m.has((y + dy) * 64 + x + dx) || x + dx < 0 || x + dx >= PN);
+  if (inside) m.add(y * 128 + x); }); return m; }
+const isEdge = (m, x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, 1], [1, -1], [-1, -1]].some(([dx, dy]) => !m.has((y + dy) * 128 + x + dx) || x + dx < 0 || x + dx >= PN);
 function cLayer(g, m, {hl = true, shade = .35} = {}){
   if (!m.size) return;
   let x0 = 999, x1 = -1, y0 = 999, y1 = -1; m.forEach(k => { const [x, y] = kxy(k); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
@@ -2819,7 +2839,7 @@ function cLayer(g, m, {hl = true, shade = .35} = {}){
   m.forEach(k => { const [x, y] = kxy(k); if (y < 0 || y >= PN) return;
     if (isEdge(m, x, y)){ g[y][x] = "#"; return; }
     const nx = (x + .5 - cx) / rx, ny = (y + .5 - cy) / ry, d = nx * .6 + ny;
-    const shine = hl && ((x + .5 - (cx - rx * .42)) / Math.max(1.6, rx * .17)) ** 2 + ((y + .5 - (cy - ry * .46)) / Math.max(1.2, ry * .13)) ** 2 <= 1;
+    const shine = hl && ((x + .5 - (cx - rx * .42)) / Math.max(2.2, rx * .17)) ** 2 + ((y + .5 - (cy - ry * .46)) / Math.max(1.7, ry * .13)) ** 2 <= 1;
     g[y][x] = shine ? "w" : d > Math.max(shade, .55) ? "s" : "l"; });
 }
 function cFlat(g, m, cls){ m.forEach(k => { const [x, y] = kxy(k); g[y][x] = isEdge(m, x, y) ? "#" : cls((x + .5) / PK - .5, (y + .5) / PK - .5); }); }
@@ -2837,32 +2857,35 @@ function faceOn(g, G, rx, cy, ry, cx = 12){
   const M = {smile: ["#..#", ".##."], cat: ["#.##.#", ".#..#."], open: [".##.", "#..#", ".##."], small: ["##"], tooth: ["####", ".#.."]}[G.mouth] || ["#..#", ".##."];
   cPut(g, Math.round(cx) - Math.floor(M[0].length / 2), ey + 4, M);
 }
-const EYE_P = {
-  dot: [".ee.", "ewee", "eeee", ".ee."],
-  big: [".eee.", "ewwee", "ewwee", "eeeee", "eeeee", ".eee."],
-  wide: [".eeee.", "ewweee", "ewweee", "eeeeee", ".eeee."],
-  bar: [".e.", "ewe", "eee", "eee", "eee", ".e."],
-  tiny: ["ee", "ee"],
-  happy: ["..ee..", ".eeee.", "ee..ee", "e....e"],
-  sleepy: ["e....e", ".eeee."],
-};
-const MOUTH_P = {
-  smile: ["#....#", ".#..#.", "..##.."], small: ["#..#", ".##."], o: [".##.", "#bb#", "#bb#", ".##."],
-  grin: ["########", "#bbbbbb#", ".#bbbb#.", "..####.."], cat: ["#..##..#", ".##..##."],
-  tongue: ["#......#", ".######.", "..#bb#..", "...##..."], teeth: ["#......#", ".######.", "..#ww#..", "..####.."], line: ["####"], none: [],
-};
-function faceX(g, F, cx, top, rx, h, tier){
-  const E = EYE_P[tier === 5 ? "sleepy" : F.eye] || EYE_P.dot, ew = E[0].length, eh = E.length, M = MOUTH_P[F.mouth] || [];
-  const ey = Math.round((top + F.ey * h) * PK), side = F.view === "left" ? -1 : F.view === "right" ? 1 : 0, mg = (F.mgap ?? 1) * 2;
-  const cheek = (x, y) => hiPut(g, x, y, ["bbbb", ".bb."], true);
-  if (side){ const ex = Math.round((cx + side * F.gap * rx) * PK - ew / 2); hiPut(g, ex, ey, E);
-    if (F.cheeks) cheek(side > 0 ? ex - 4 : ex + ew, ey + eh + 1);
-    if (M.length) hiPut(g, Math.round((cx + side * rx * .8) * PK - (side > 0 ? M[0].length : 0)), ey + eh + mg, M);
-    return; }
-  const lx = Math.round((cx - F.gap * rx) * PK - ew / 2), rxe = Math.round((cx + F.gap * rx) * PK - ew / 2);
-  hiPut(g, lx, ey, E); hiPut(g, rxe, ey, E);
-  if (F.cheeks){ cheek(lx - 4, ey + eh + 1); cheek(rxe + ew, ey + eh + 1); }
-  if (M.length) hiPut(g, Math.round(cx * PK - M[0].length / 2), ey + eh + mg, M);
+const EYE_P = {dot: [.95, 1.05], big: [1.3, 1.6], wide: [1.55, 1.35], bar: [.62, 1.5], tiny: [.62, .62], happy: [1.1, .9], sleepy: [1.1, .6], closed: [1.1, .6]};
+function cArc(m, cx, cy, r, w, half){ cEach((x, y, X, Y) => { const d = Math.hypot(X - cx, Y - cy); if (Math.abs(d - r) <= w / 2 && (half === "up" ? Y <= cy + .05 : Y >= cy - .05)) m.add(y * 128 + x); }); return m; }
+function paintM(g, m, ch, onBody){ m.forEach(k => { const [x, y] = kxy(k); if (onBody && !"lhsdwpq".includes(g[y][x])) return; g[y][x] = ch; }); }
+function faceX(g, F, cx, top, rx, h, tier, sleep){
+  const kind = sleep ? "closed" : tier === 5 ? "sleepy" : F.eye, [erx, ery] = EYE_P[kind] || EYE_P.dot;
+  const ey = top + F.ey * h + ery, side = F.view === "left" ? -1 : F.view === "right" ? 1 : 0;
+  const xs = side ? [cx + side * F.gap * rx] : [cx - F.gap * rx, cx + F.gap * rx];
+  xs.forEach(ex => {
+    if (kind === "happy") paintM(g, cArc(cMask(), ex, ey + .5, 1.15, .62, "up"), "e");
+    else if (kind === "sleepy" || kind === "closed") paintM(g, cArc(cMask(), ex, ey - .5, 1.1, .55, "down"), "e");
+    else { paintM(g, cEll(cMask(), ex, ey, erx, ery), "e");
+      if (kind !== "tiny") paintM(g, cEll(cMask(), ex - erx * .35, ey - ery * .42, Math.max(.32, erx * .4), Math.max(.32, erx * .4)), "w");
+      if (kind === "big" || kind === "wide") paintM(g, cEll(cMask(), ex + erx * .38, ey + ery * .45, .22, .22), "w"); }
+    if (F.cheeks){ const cxs = side ? [ex - side * (erx + .9)] : [ex + (ex < cx ? -1 : 1) * (erx + .7)]; cxs.forEach(c => paintM(g, cEll(cMask(), c, ey + ery + .55, 1.15, .58), "b", true)); }
+  });
+  const my = ey + ery + (F.mgap ?? 1) * .55 + .35, mx = side ? cx + side * rx * .6 : cx;
+  const ink = m => paintM(g, m, "#");
+  switch (F.mouth){
+    case "smile": ink(cArc(cMask(), mx, my - .55, 1.1, .5, "down")); break;
+    case "small": ink(cArc(cMask(), mx, my - .45, .7, .45, "down")); break;
+    case "line": ink(cLine(cMask(), mx - .7, my, mx + .7, my, .45)); break;
+    case "o": { const m = cEll(cMask(), mx, my + .3, .85, .95); paintM(g, m, "#"); paintM(g, cEll(cMask(), mx, my + .35, .48, .55), "b"); break; }
+    case "grin": { const m = cMask(); cEll(m, mx, my - .2, 1.7, 1.55); const keep = new Set(); m.forEach(k => { const [, y] = kxy(k); if ((y + .5) / PK >= my - .2) keep.add(k); });
+      paintM(g, keep, "#"); const inner = cMask(); cEll(inner, mx, my - .2, 1.25, 1.1); const k2 = new Set(); inner.forEach(k => { const [, y] = kxy(k); if ((y + .5) / PK >= my + .05) k2.add(k); }); paintM(g, k2, "b"); break; }
+    case "cat": ink(cArc(cMask(), mx - .62, my - .35, .62, .42, "down")); ink(cArc(cMask(), mx + .62, my - .35, .62, .42, "down")); break;
+    case "tongue": ink(cArc(cMask(), mx, my - .55, 1.1, .5, "down")); paintM(g, cEll(cMask(), mx + .2, my + .75, .55, .5), "b"); break;
+    case "teeth": ink(cArc(cMask(), mx, my - .5, .9, .45, "down")); { const t = cRect(cMask(), mx - .62, my + .25, mx + .62, my + 1.25); paintM(g, t, "#"); paintM(g, cRect(cMask(), mx - .36, my + .38, mx + .36, my + 1.05), "w"); } break;
+  }
+  return {eyeBottom: ey + ery, my};
 }
 function armsOn(g, G, cy, ry){ if (G.arms !== "nubs") return; const ay = Math.round((cy + ry * .2) * PK), row = g[ay]; if (!row) return;
   const l = row.indexOf("#"), r = row.lastIndexOf("#");
@@ -2901,18 +2924,18 @@ function gemGrid(G, stage, tier, f){
     const m = cPoly(cMask(), [[12 - rx + c1, top], [12 + rx - c2, top + .4], [12 + rx, top + c2 + .4], [12 + rx, cy + ry - c3], [12 + rx - c3, cy + ry], [12 - rx + c4, cy + ry], [12 - rx, cy + ry - c4], [12 - rx, top + c1]]);
     cFlat(g, m, (x, y) => { const dx = (x + .5 - 11.2) / rx, dy = (y + .5 - cy + .6) / ry;
       if (Math.abs(dx) < .52 && Math.abs(dy) < .46) return "h"; return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "l" : "s") : (dx < 0 ? "l" : "s"); });
-    hiPut(g, Math.round((12 - rx * .4) * PK), Math.round((cy - ry * .4) * PK), ["ww", "w."], true);
+    paintM(g, cEll(cMask(), 12 - rx * .42, cy - ry * .42, .55, .45), "w", true);
   } else {
     const m = cEll(cMask(), 12, cy, rx, ry); cEll(m, 12 - rx * .35, cy - ry * .45, rx * .55, ry * .6); cEll(m, 12 + rx * .4, cy + ry * .1, rx * .62, ry * .85);
     cLayer(g, m);
   }
-  if (v === "ore"){ const r = hashR(G.ps); for (let i = 0; i < 6; i++){ const x = Math.round((12 + (r() - .5) * rx * 1.4) * PK), y = Math.round((cy + (r() - .2) * ry * .9) * PK); hiPut(g, x, y, ["pp", "pq"], true); } }
+  if (v === "ore"){ const r = hashR(G.ps); for (let i = 0; i < 6; i++){ const x = Math.round((12 + (r() - .5) * rx * 1.4) * PK), y = Math.round((cy + (r() - .2) * ry * .9) * PK); paintM(g, cEll(cMask(), x / PK, y / PK, .55, .5), "p", true); } }
   if (v === "geode"){ const band = top + 3.6 * f; cEach((x, y, X, Y) => { const edge = band + (Math.floor(X) % 3 === 1 ? -.9 : 0); if (inB(g, x, y) && Y < edge) g[y][x] = (x + y) % 5 === 0 ? "w" : (Math.floor(X) + Math.floor(Y)) % 2 ? "p" : "q"; });
     for (let x = 0; x < PN; x++){ const X = (x + .5) / PK, y = Math.round((band + (Math.floor(X) % 3 === 1 ? -.9 : 0)) * PK); if (inB(g, x, y)) g[y][x] = "#"; } }
   if (v === "moss"){ cEach((x, y, X, Y) => { const lim = top + 2.4 * f + (Math.sin(X * 1.3) + 1) * .9 + (Math.floor(X) % 5 === 2 ? 1.4 : 0); if (inB(g, x, y) && Y < lim) g[y][x] = Y > lim - .7 ? "x" : "v"; }); }
-  if (body === "cut") faceX(g, {eye: "big", gap: .36, ey: .3, mouth: "grin", cheeks: true}, 11.4, top, rx, 2 * ry, tier);
-  else if (body === "pebble") faceX(g, {view: "right", eye: "big", gap: .42, ey: .3, mouth: "small", mgap: 1, cheeks: true}, 12.6, top, rx, 2 * ry, tier);
-  else faceX(g, {eye: "bar", gap: .34, ey: .38, mouth: "small", mgap: 1, cheeks: true}, 12, top, rw, bottom - top, tier);
+  if (body === "cut") faceX(g, {eye: "big", gap: .36, ey: .3, mouth: "grin", cheeks: true}, 11.4, top, rx, 2 * ry, tier, G._sleep);
+  else if (body === "pebble") faceX(g, {view: "right", eye: "big", gap: .42, ey: .3, mouth: "small", mgap: 1, cheeks: true}, 12.6, top, rx, 2 * ry, tier, G._sleep);
+  else faceX(g, {eye: "bar", gap: .34, ey: .38, mouth: "small", mgap: 1, cheeks: true}, 12, top, rw, bottom - top, tier, G._sleep);
   armsOn(g, G, cy, ry);
   if (stage === "adult" && tier === 1) starAt(g, 2.6, Math.max(2, top + 1), 2.2);
   return g;
@@ -2945,14 +2968,14 @@ function plantGrid(G, stage, tier, f){
   if (v === "bloom"){ cInk(g, cLine(cMask(), 12.4, top + .6, 13.4, top - 3.2, .6)); leaf(14.6, top - 1.6, 1.8, 1, 30);
     const fx = 13.6, fy = top - 5.2; [0, 72, 144, 216, 288].forEach(a => { const r = a * Math.PI / 180; cFlat(g, cEll(cMask(), fx + Math.cos(r - Math.PI / 2) * 1.8, fy + Math.sin(r - Math.PI / 2) * 1.8, 1.45, 1.45), (x, y) => (x + .5 > fx + .6 && y + .5 > fy) ? "q" : "p"); });
     cFlat(g, cEll(cMask(), fx, fy, 1.1, 1.1), () => "y"); }
-  if (v === "spiky"){ const r = hashR(G.ps || 3); g.forEach((row, y) => row.forEach((c, x) => { if (c === "#" && y < (cy + ry * .5) * PK && r() < .07){ const ox = x < 12 * PK ? -1 : 1; if (g[y][x + ox] === "."){ g[y][x + ox] = "#"; if (g[y][x + 2 * ox] === ".") g[y][x + 2 * ox] = "#"; } } }));
+  if (v === "spiky"){ const r = hashR(G.ps || 3); g.forEach((row, y) => row.forEach((c, x) => { if (c === "#" && y < (cy + ry * .5) * PK && r() < .045){ const ox = x < 12 * PK ? -1 : 1; for (let i = 1; i <= 3; i++){ if (g[y][x + i * ox] !== ".") break; g[y][x + i * ox] = "#"; } } }));
     [0, 120, 240].forEach(a => { const rr = a * Math.PI / 180; cFlat(g, cEll(cMask(), 12.2 + Math.cos(rr - Math.PI / 2) * 1.1, top - .8 + Math.sin(rr - Math.PI / 2) * 1.1, 1, 1), () => "p"); });
     cFlat(g, cEll(cMask(), 12.2, top - .8, .7, .7), () => "y"); }
   if (v === "mushroom"){ const cr = rx + 2.2, m = cEll(cMask(), 12.8, top + 2.4, cr, 4.6 * f + .8), keep = new Set(); m.forEach(k => { const [, y] = kxy(k); if ((y + .5) / PK <= top + 2.6) keep.add(k); });
     cFlat(g, keep, (x, y) => x + .5 > 12 + cr * .45 ? "q" : "p"); [[12 - cr * .45, top - 1], [12 + cr * .1, top - 2.2], [12 + cr * .5, top]].forEach(([x, y]) => { const m2 = cEll(cMask(), x, y, .8, .7); m2.forEach(k => { const [X, Y] = kxy(k); if ("pq".includes(g[Y][X])) g[Y][X] = "w"; }); }); }
-  if (body === "bulb") faceX(g, {eye: "dot", gap: .44, ey: .56, mouth: "smile", cheeks: true}, 11.6, top, rx, bottom - top, tier);
-  else if (body === "cactus") faceX(g, {eye: "dot", gap: .3, ey: .2, mouth: "small", cheeks: true}, 12, top, rx, bottom - top, tier);
-  else faceX(g, {eye: "wide", gap: .38, ey: .42, mouth: "none", cheeks: true}, 12, top, rx, 2 * ry, tier);
+  if (body === "bulb") faceX(g, {eye: "dot", gap: .44, ey: .56, mouth: "smile", cheeks: true}, 11.6, top, rx, bottom - top, tier, G._sleep);
+  else if (body === "cactus") faceX(g, {eye: "dot", gap: .3, ey: .2, mouth: "small", cheeks: true}, 12, top, rx, bottom - top, tier, G._sleep);
+  else faceX(g, {eye: "wide", gap: .38, ey: .42, mouth: "none", cheeks: true}, 12, top, rx, 2 * ry, tier, G._sleep);
   if (body !== "pot") armsOn(g, G, cy, ry);
   if (stage === "adult" && tier === 1) starAt(g, 2.6, Math.max(2, top + 1), 2.2);
   return g;
@@ -2992,11 +3015,10 @@ function animalGrid(G, stage, tier, f){
   const FS = body === "loaf" ? {eye: "dot", gap: .42, ey: .36, mouth: mouthV, mgap: 1, cheeks: true}
     : body === "stand" ? {eye: "happy", gap: .4, ey: .3, mouth: "grin", mgap: 1, cheeks: true}
     : {eye: "big", gap: .4, ey: .3, mouth: mouthV, mgap: 1, cheeks: true};
-  if (v === "dog" || v === "bear") FS.mgap = 1.5;
-  faceX(g, FS, hx, ht, rhx, 2 * rhy, tier);
-  const ey = Math.round((ht + FS.ey * 2 * rhy) * PK), E = EYE_P[FS.eye], ny = ey + E.length + 1, nx = Math.round(hx * PK) - 2;
-  if ((v === "dog" || v === "bear") && body !== "stand") hiPut(g, nx, ny, ["####", ".##."]);
-  if (v === "cat"){ [[-1, 0], [-1, 1.2], [1, 0], [1, 1.2]].forEach(([sd, dy]) => { const yy = ny / PK + dy, x0 = hx + sd * (rhx - .2); cInk(g, cLine(cMask(), x0, yy, x0 + sd * 2, yy - .4 + dy * .4, .5)); }); }
+  if (v === "dog" || v === "bear") FS.mgap = 2.2;
+  const fm = faceX(g, FS, hx, ht, rhx, 2 * rhy, tier, G._sleep);
+  if ((v === "dog" || v === "bear") && body !== "stand") paintM(g, cEll(cMask(), hx, fm.eyeBottom + .55, .75, .48), "#");
+  if (v === "cat"){ [[-1, 0], [-1, 1], [1, 0], [1, 1]].forEach(([sd, dy]) => { const yy = fm.eyeBottom + .5 + dy * .9, x0 = hx + sd * (rhx - .3); cInk(g, cLine(cMask(), x0, yy, x0 + sd * 2.2, yy - .5 + dy * .5, .38)); }); }
   if (body === "sit") [[bx - 2.4 * f, bottom - .9], [bx + 1.6 * f, bottom - .9]].forEach(([x, y]) => layer(cEll(cMask(), x, y, 1.9 * f + .2, 1.3), {hl: false}));
   if (body === "loaf") [[hx - 1.8, bottom - .8], [hx + 2.2, bottom - .8]].forEach(([x, y]) => layer(cEll(cMask(), x, y, 1.8, 1.2), {hl: false}));
   if (stage === "adult" && tier === 1) starAt(g, 21, 2.6, 2.2);
@@ -3008,10 +3030,10 @@ function rareGrid(G, stage, tier, f){
     const rx = 6.8 * f + .5, ry = 6.4 * f + .5, cx = 10, cy = bottom - ry;
     const tail = cMask(); [[1.1, -.2, 1], [1.7, -.6, .85], [2.3, -1.1, .68], [2.8, -1.7, .5]].forEach(([u, v, k]) => cEll(tail, cx + rx * u, cy + ry * v, rx * .55 * k + .4, ry * .5 * k + .4));
     cFlat(g, tail, (x, y) => y + .5 > cy - ry * .9 + (x - cx) * -.15 ? "q" : "p");
-    [[1.5, -.9], [2.3, -1.5], [1.9, -.1]].forEach(([u, v]) => hiPut(g, Math.round((cx + rx * u) * PK), Math.round((cy + ry * v) * PK), [".w.", "www", ".w."], true));
+    [[1.5, -.9], [2.3, -1.5], [1.9, -.1]].forEach(([u, v]) => { const X = cx + rx * u, Y = cy + ry * v; paintM(g, cRect(cMask(), X - .55, Y - .17, X + .55, Y + .17), "w", true); paintM(g, cRect(cMask(), X - .17, Y - .55, X + .17, Y + .55), "w", true); });
     cLayer(g, cEll(cMask(), cx, cy, rx, ry));
     starAt(g, cx, cy - ry - .6, 2.4);
-    faceX(g, {eye: "big", gap: .38, ey: .34, mouth: "o", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier);
+    faceX(g, {eye: "big", gap: .38, ey: .34, mouth: "o", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier, G._sleep);
   } else {
     const rx = 4.6 * f + .6, ry = 6 * f + .5, cx = 12, cy = bottom - ry;
     [-1, 1].forEach(sd => { const w = cEll(cMask(), cx + sd * (rx + 3.4 * f), cy - ry * .35, 4 * f + .6, 4.6 * f + .5); cEll(w, cx + sd * (rx + 2.6 * f), cy + ry * .45, 2.8 * f + .5, 2.8 * f + .3);
@@ -3019,7 +3041,7 @@ function rareGrid(G, stage, tier, f){
       cFlat(g, w, (x, y) => { const d = (x + .5 - ex) ** 2 + (y + .5 - ey2) ** 2; return d < 1.6 ? "w" : d < 4.4 ? "q" : "p"; }); });
     cLayer(g, cEll(cMask(), cx, cy, rx, ry));
     const ty = cy - ry; [-1, 1].forEach(sd => { cInk(g, cLine(cMask(), cx + sd * 1, ty + .4, cx + sd * 4.2, ty - 3.6, .55)); cFlat(g, cEll(cMask(), cx + sd * 4.4, ty - 3.8, .9, .9), () => "p"); });
-    faceX(g, {eye: "dot", gap: .48, ey: .2, mouth: "small", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier);
+    faceX(g, {eye: "dot", gap: .48, ey: .2, mouth: "small", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier, G._sleep);
   }
   if (stage === "adult" && tier === 1) starAt(g, 2.6, 2.6, 2.2);
   return g;
@@ -3030,9 +3052,9 @@ function eggGrid(genes){
   [[8.6, 9.6, 1.9, 1.5], [15.2, 14.6, 2.4, 1.9], [9.4, 18.4, 1.4, 1.1], [14.4, 7.4, 1, .9]].forEach(([x, y, a, b]) => cEll(cMask(), x, y, a, b).forEach(k => { const [X, Y] = kxy(k); if ("lsw".includes(g[Y][X])) g[Y][X] = "p"; }));
   const rows = g.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows;
 }
-function creatureGrid(genes, stage, tier = 2){
-  const key = JSON.stringify([genes, stage, tier]); if (CG.has(key)) return CG.get(key);
-  const G = {...genes}, f = {baby: .64, child: .8, teen: .9, adult: 1}[stage] || 1;
+function creatureGrid(genes, stage, tier = 2, sleep = false){
+  const key = JSON.stringify([genes, stage, tier, sleep]); if (CG.has(key)) return CG.get(key);
+  const G = {...genes, _sleep: sleep}, f = {baby: .64, child: .8, teen: .9, adult: 1}[stage] || 1;
   const done = gg => { const rows = gg.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows; };
   if (G.kind === "rare") return done(rareGrid(G, stage, tier, f));
   if ((G.kind === "plant" || G.kind === "gem" || G.kind === "animal") && G.pbody){
@@ -3059,7 +3081,7 @@ function creatureGrid(genes, stage, tier = 2){
   else if (G.shape === "drop"){ cEll(B, 12, cy + ry * .12, rx, ry * .88); cEll(B, 12, cy - ry * .62, rx * .42, ry * .4); }
   else cEll(B, 12, cy, rx, ry);
   cLayer(g, B);
-  faceX(g, {eye: G.eyes === "happy" ? "happy" : G.eyes === "sleepy" ? "sleepy" : "big", gap: .34, ey: .36, mouth: G.mouth === "cat" ? "cat" : G.mouth === "open" ? "o" : G.mouth === "small" ? "small" : "smile", cheeks: G.cheek !== "none"}, 12, top, rx, 2 * ry, tier);
+  faceX(g, {eye: G.eyes === "happy" ? "happy" : G.eyes === "sleepy" ? "sleepy" : "big", gap: .34, ey: .36, mouth: G.mouth === "cat" ? "cat" : G.mouth === "open" ? "o" : G.mouth === "small" ? "small" : "smile", cheeks: G.cheek !== "none"}, 12, top, rx, 2 * ry, tier, G._sleep);
   armsOn(g, G, cy, ry);
   const rows = g.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows;
 }
@@ -3084,8 +3106,8 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
     } return false; };
   const fills = {}, push = (fill, x, y) => { (fills[fill] = fills[fill] || []).push([x, y]); };
   rows.forEach((row, y) => { for (let x = 0; x < width; x++){ let c = row[x]; if (c === ".") continue;
-    if (sleep && c === "w") c = "l";
-    if (c === "e" && sleep){ if ((rows[y + 1] || "")[x] === "e"){ c = "l"; } else { push("ink", x, y); const one = row[x - 1] !== "e" && row[x + 1] !== "e" && row[x - 1] !== "w" && row[x + 1] !== "w"; if (one) push("ink", x + (x < width / 2 ? 1 : -1), y); continue; } }
+    if (sleep && kk === 1 && c === "w") c = "l";
+    if (c === "e" && sleep && kk === 1){ if ((rows[y + 1] || "")[x] === "e"){ c = "l"; } else { push("ink", x, y); const one = row[x - 1] !== "e" && row[x + 1] !== "e" && row[x - 1] !== "w" && row[x + 1] !== "w"; if (one) push("ink", x + (x < width / 2 ? 1 : -1), y); continue; } }
     if (!genes){ push("lhpvy".includes(c) ? "l" : "sdqx".includes(c) ? "s" : c === "b" ? "b" : c === "w" ? "w" : "ink", x, y); continue; }
     if (c === "#") push("#2b2230", x, y);
     else if (c === "e") push(genes.ec === "ink" ? "#1c141e" : genes.ec, x, y);
@@ -3116,7 +3138,7 @@ function petGrid(P){
   if (P.dead) return SPR.grave.split("\n");
   if (P.stage === "egg") return P.genes ? eggGrid(P.genes) : SPR.egg.split("\n");
   if (!P.genes) return SPR[P.form].split("\n");
-  return creatureGrid(P.genes, P.stage, P_TIER[P.form] || 2);
+  return creatureGrid(P.genes, P.stage, P_TIER[P.form] || 2, !!P.asleep);
 }
 function petMini(P, cls = "petmini"){
   const g = petGrid(P), k = g.k || 1, w = g[0].length / k, h = g.length / k;
