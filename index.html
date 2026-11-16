@@ -408,6 +408,8 @@ details > summary{list-style:none}details > summary::-webkit-details-marker{disp
 @media (prefers-reduced-motion: reduce){.rfill{animation:none}}
 .newtag{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:14px;display:grid;gap:10px}
 .swatches{display:flex;gap:8px;flex-wrap:wrap}.swb{width:30px;height:30px;border-radius:50%;background:var(--sw);border:2px solid transparent;box-shadow:inset 0 0 0 2px var(--lcd)}.swb.on{border-color:var(--ink)}
+.row.tagged{background:color-mix(in srgb, var(--tf) 22%, var(--lcd));border-radius:12px;margin:3px 6px;border-top-color:transparent}
+.row.tagged + .row{border-top-color:transparent}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
 
@@ -769,6 +771,7 @@ const tagColor = t => PAL[(t.c || 0) % PAL.length];
 function catOf(x){ if (x.cat === "work" || x.cat === "life") return x.cat; return (Array.isArray(x.tags) && x.tags.includes("work")) ? "work" : "life"; }
 const catColor = x => catColors()[catOf(x)];
 const firstColor = catColor;
+const tagFill = x => { const t = tagsOf(x)[0]; return t ? ` tagged" style="--tf:${tagColor(t)}` : ""; };
 const tagsOf = x => (Array.isArray(x.tags) ? x.tags : []).map(tagById).filter(Boolean);
 const catOk = x => catFilter === "all" || (catFilter === "work" || catFilter === "life" ? catOf(x) === catFilter : tagsOf(x).some(t => t.id === catFilter));
 const tagCC = t => t.cat === "both" ? "var(--ink)" : catColors()[t.cat];
@@ -1096,7 +1099,7 @@ function taskRow(t, dr){
   if (t.due) meta.push(`<span class="tag ${late?"warn":""}">${esc(relDay(t.due))}${t.time?" · "+fmtTime(t.time):""}</span>`);
   if (t.repeat && t.repeat.freq && !t.done) meta.push("↻ " + esc(repeatText(t.repeat, t.rstart || t.due)) + (t.repeat.regen ? " after done" : ""));
   if (t.notes) meta.push(esc(t.notes.split("\n")[0].slice(0,60)));
-  return `<div class="row ${t.done?"done":""}" ${dr ? `data-oid="${t.id}"` : ""}>${dr ? GRIP : ""}
+  return `<div class="row ${t.done?"done":""}${tagFill(t)}" ${dr ? `data-oid="${t.id}"` : ""}>${dr ? GRIP : ""}
     <span class="bar-l" style="--c:${firstColor(t)}"></span><input type="checkbox" class="chk" data-toggle-task="${t.id}" ${t.done?"checked":""} aria-label="Done">
     <div class="grow tap" data-edit-task="${t.id}"><div class="t">${esc(t.title)}</div>${meta.length?`<div class="m">${meta.join(" ")}</div>`:""}</div>
   </div>`;
@@ -1112,7 +1115,7 @@ function eventRow(e){
   if (e.repeat && e.repeat.freq) meta.push("↻ " + esc(repeatText(e.repeat, e.date)));
   if (e.remind != null && e.remind !== "") meta.push("🔔");
   if (e.show && e.show !== "busy") meta.push(SHOW[e.show]);
-  return `<div class="row tap ev-${e.show||"busy"}" data-edit-event="${e.id}" data-occ="${e.occ || e.date}"><span class="bar-l" style="--c:${firstColor(e)}"></span>
+  return `<div class="row tap ev-${e.show||"busy"}${tagFill(e)}" data-edit-event="${e.id}" data-occ="${e.occ || e.date}"><span class="bar-l" style="--c:${firstColor(e)}"></span>
     <div style="width:64px;flex:none;color:var(--muted);font-size:12.5px">${when}</div>
     <div class="grow"><div class="t">${esc(e.title)}</div><div class="m">${meta.join(" · ")}</div>${e.note ? `<div class="npre">${esc(e.note.slice(0,80))}</div>` : ""}</div>
   </div>`;
