@@ -1341,7 +1341,7 @@ function wireFoodSearch(S){
     show([], "Searching…");
     try {
       const {list, errs} = await foodSearch(q);
-      if (list.length) show(list);
+      if (list.length){ show(list); if (errs.some(e => e.includes("fdc-limit"))) out.insertAdjacentHTML("afterbegin", `<div class="sub" style="padding:4px 2px">USDA's free search limit is used up for now, so only Open Food Facts results are shown. A free key in Settings → Food search fixes this.</div>`); }
       else if (errs.length === 2) show([], errs.some(e => e.includes("fdc-limit")) ? "The free search limit is used up for now. Try again in an hour, or add your own free key in Settings → Food search." : "Food search needs the installed app and an internet connection.");
       else show([], "No matches. Try fewer or simpler words.");
     } catch { show([], "Food search needs the installed app and an internet connection."); }
