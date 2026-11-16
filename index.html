@@ -502,6 +502,12 @@ details > summary{list-style:none}details > summary::-webkit-details-marker{disp
 .dls{display:flex;gap:3px;margin-top:6px}
 .dl{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font:500 9.5px var(--pix);color:var(--muted);border:1px solid var(--line)}
 .dl.on{background:var(--ink);color:var(--lcd-2);border-color:var(--ink)}
+.focusbox{margin-top:14px;padding:12px 14px;border-left:4px solid var(--accent, var(--ink))}
+.focusbox .fk{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted, var(--sub));margin-bottom:6px}
+.focusbox .frow{display:flex;align-items:center;gap:12px}
+.focusbox .finp{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;font-size:19px;font-weight:600;padding:4px 0;outline:none;border-bottom:1px solid var(--line)}
+.focusbox .finp:focus{border-bottom-color:var(--ink)}
+.focusbox.done .finp{text-decoration:line-through;opacity:.55;border-bottom-color:transparent}
 </style>
 </head>
 <body>
@@ -973,9 +979,11 @@ const REORDER = {
   eats: (ids, d) => { const es = eatsOf(d), moved = ids.map(id => es.find(e => e.id === id)).filter(Boolean); setDay(d, {eats: [...es.filter(e => !ids.includes(e.id)), ...moved]}); },
 };
 document.addEventListener("input", e => { const t = e.target;
+  if (t.dataset && "focus" in t.dataset){ const d = today(), dd = dayDoc(d), v = t.value; put("day-" + d, {...dd, kind:"day", date:d, focus: {...(dd.focus || {}), text: v, done: v.trim() ? !!(dd.focus || {}).done : false}}, {silent: true}); const cb = t.parentNode.querySelector("[data-focus-done]"); if (cb) cb.disabled = !v.trim(); return; }
   if (t.tagName === "INPUT" && (t.inputMode === "decimal" || t.inputMode === "numeric")){
     const v = t.value, w = v.replace(/,/g, ".").replace(t.inputMode === "numeric" ? /[^0-9]/g : /[^0-9.\-]/g, "").replace(/(?!^)-/g, "").replace(/(\..*)\./g, "$1");
     if (w !== v){ const pos = t.selectionStart - (v.length - w.length); t.value = w; try { t.setSelectionRange(pos, pos); } catch {} } } }, true);
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset && "focus" in e.target.dataset){ e.preventDefault(); e.target.blur(); } });
 let drag = null;
 document.addEventListener("pointerdown", e => {
   const g = e.target.closest("[data-grip]"); if (!g) return;
@@ -1140,6 +1148,7 @@ function viewToday(){
   return `
   <div class="kicker">${greet}</div><h1>${esc(fmtDay(t))}</h1>
   <div class="dayline" title="Today's dailies"><div class="ln"><i style="width:${pc}%"></i></div><span>${pc}%</span></div>
+  ${(() => { const f = dayDoc(t).focus || {}; return `<div class="card focusbox ${f.done ? "done" : ""}"><div class="fk">Today's task</div><div class="frow"><input type="checkbox" class="chk" data-focus-done ${f.done ? "checked" : ""} ${f.text ? "" : "disabled"} aria-label="Done"><input class="finp" data-focus value="${esc(f.text || "")}" aria-label="Today's task" autocomplete="off" enterkeyhint="done"></div></div>`; })()}
   ${c.goals.on && activeGoals().length ? `<div class="gtiles">${activeGoals().map(g => { const p = Math.round(goalProg(g) * 100); return `<button class="gtile" data-goal-open="${g.id}" style="--cc:${catColor(g)}" aria-label="${esc(g.title)}, ${p}%"><span class="gw">${esc(shortName(g))}</span><span class="gbar"><i style="width:${p}%"></i></span><span class="gp">${p}%</span></button>`; }).join("")}</div>` : ""}
 
   ${viewDay === t ? petTodayRow() : ""}
@@ -2113,6 +2122,7 @@ function restoreSheet(){
 function moveUp(list, id, save){ const i = list.findIndex(x => x.id === id); if (i < 1) return; list.splice(i-1, 0, list.splice(i,1)[0]); save(list); }
 document.addEventListener("change", e => {
   const el = e.target, c = cfg();
+  if ("focusDone" in el.dataset){ const d = today(), dd = dayDoc(d); setDay(d, {focus: {...(dd.focus || {}), done: el.checked}}); return; }
   if (el.dataset.habTitle){ const id = el.dataset.habTitle, v = el.value.trim(); if (v && items[id]) put(id, {...items[id], title: v}); return; }
   if (el.dataset.tagName){ const v = el.value.trim(); if (!v) return render(); saveCfg({tags: tags().map(t => t.id === el.dataset.tagName ? {...t, name: v} : t)}); return; }
   if (el.dataset.catColor){ saveCfg({catColors: {...((items.settings||{}).catColors || {}), [el.dataset.catColor]: Number(el.value)}}); return; }
