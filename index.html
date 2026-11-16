@@ -1446,8 +1446,8 @@ function wireFoodSearch(S){
   const box = S.querySelector("#fs-q"), btn = S.querySelector("[data-fs-go]"), out = S.querySelector("#fs-out"), scan = S.querySelector("[data-fs-scan]");
   if (!box) return;
   let found = [];
-  const fill = x => { S.querySelector("[name=name]").value = x.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = x[k] === "" ? "" : x[k]);
-    const sv = S.querySelector("#fs-serv"); if (sv) sv.textContent = "Per serving: " + x.serving + " · from " + x.src + " (" + x.srcNote + ")" + (addsUp(x) ? "" : " · these numbers don't add up, check the label"); out.innerHTML = ""; S.querySelector("[name=qty]").focus(); };
+  const fill = x => { S.querySelector("[name=name]").value = x.name; if (S._sc) S._sc.set(x); else ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = x[k] === "" ? "" : x[k]);
+    const sv = S.querySelector("#fs-serv"); if (sv){ sv.hidden = false; } if (sv) sv.textContent = "1 serving = " + x.serving + " · from " + x.src + " (" + x.srcNote + ")" + (addsUp(x) ? "" : " · these numbers don't add up, check the label"); out.innerHTML = ""; S.querySelector("[name=qty]").focus(); };
   const show = (list, msg) => { found = list;
     out.innerHTML = msg ? `<div class="sub" style="padding:8px 2px">${esc(msg)}</div>` : list.map((x, i) => `<button type="button" class="fsr" data-fs-pick="${i}"><span class="t">${esc(x.name)}</span><span class="m">${x.kcal} cal · P ${x.p} · C ${x.c} · F ${x.f} · per ${esc(x.serving)}</span><span class="m">${x.src} · ${x.srcNote}${addsUp(x) ? "" : ` · <b class="warnt">numbers don't add up</b>`}</span></button>`).join("");
     out.querySelectorAll("[data-fs-pick]").forEach(b => b.onclick = () => fill(found[+b.dataset.fsPick])); };
@@ -1485,6 +1485,34 @@ async function scanBarcode(onCode){
   tick();
 }
 
+/* ---------- servings scaler: fields show totals; changing any number scales the rest ---------- */
+const NUTS = [["kcal","Calories",0],["p","Protein (g)",1],["c","Carbs (g)",1],["f","Fat (g)",1]];
+const rN = (v, d) => { const m = 10 ** d; return Math.round(v * m) / m; };
+function nutFields(x){
+  const q = +x.qty || 1, tot = k => x[k] === "" || x[k] == null ? "" : rN(x[k] * q, k === "kcal" ? 0 : 1);
+  return `<div class="sub" style="margin:-2px 0 6px" id="fs-serv" ${x.serving ? "" : "hidden"}>${esc(x.serving || "")}</div>
+    <label class="fld" style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><span style="margin:0;flex:1">Scale together<span class="sub" style="display:block;text-transform:none;letter-spacing:0;font-family:var(--sans)">Totals for all servings. Change one number and the rest follow.</span></span><input type="checkbox" class="switch" data-scale checked></label>
+    <div class="two">${NUTS.slice(0,2).map(([k,l]) => `<label class="fld"><span>${l}</span><input name="${k}" type="number" min="0" step="any" inputmode="decimal" value="${tot(k)}" ${k==="kcal"?"required":""}></label>`).join("")}</div>
+    <div class="two">${NUTS.slice(2).map(([k,l]) => `<label class="fld"><span>${l}</span><input name="${k}" type="number" min="0" step="any" inputmode="decimal" value="${tot(k)}"></label>`).join("")}</div>`;
+}
+function wireScaler(S, x){
+  const num = v => v === "" || v == null || isNaN(+v) ? null : +v;
+  const st = {qty: +x.qty || 1, base: Object.fromEntries(NUTS.map(([k]) => [k, num(x[k])]))};
+  const Q = S.querySelector("[name=qty]"), F = k => S.querySelector(`[name=${k}]`), link = S.querySelector("[data-scale]");
+  const paint = skip => { NUTS.forEach(([k,,d]) => { if (k === skip) return; const b = st.base[k]; F(k).value = b == null ? "" : rN(b * st.qty, d); });
+    if (skip !== "qty") Q.value = rN(st.qty, 2); };
+  Q.addEventListener("input", () => { const v = num(Q.value); if (!v || v <= 0) return; st.qty = v; paint("qty"); });
+  NUTS.forEach(([k]) => F(k).addEventListener("input", () => { const v = num(F(k).value), b = st.base[k];
+    if (v == null){ return; }
+    if (link.checked && b > 0 && v > 0){ st.qty = v / b; paint(k); }
+    else st.base[k] = v / st.qty; }));
+  NUTS.forEach(([k]) => F(k).addEventListener("change", () => { if (num(F(k).value) == null) st.base[k] = null; }));
+  S._sc = {
+    set(y){ NUTS.forEach(([k]) => st.base[k] = num(y[k])); paint(); },
+    per(){ return Object.fromEntries(NUTS.map(([k]) => [k, Math.max(0, rN(st.base[k] || 0, 3))])); },
+    get qty(){ return Math.max(0.01, rN(st.qty, 3)); },
+  };
+}
 /* ---------- repeat (planned) foods ---------- */
 const repeats = () => all("foodRepeat").sort((a, b) => { const o = id => { const i = foodMeals().findIndex(m => m.id === id); return i < 0 ? 99 : i; }; return o(a.meal) - o(b.meal) || byOrder((x, y) => (x.created || 0) - (y.created || 0))(a, b); });
 const plannedFor = d => repeats().filter(r => (r.days || []).includes(parse(d).getDay()));
@@ -1515,28 +1543,24 @@ function repeatSheet(id){
     ${id ? "" : `<div class="fld"><span>Search foods</span><div class="quick" style="margin-top:0"><input id="fs-q" placeholder="Search" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-fs-go>Search</button>${"BarcodeDetector" in window ? `<button type="button" class="btn" data-fs-scan aria-label="Scan barcode">Scan</button>` : ""}</div><div id="fs-out" class="fsout"></div></div>`}
     ${!id && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(f => `<button type="button" class="chip" data-pick="${f.id}">${esc(f.name)}</button>`).join("")}</div></div>` : ""}
     <label class="fld"><span>Food</span><input name="name" value="${esc(x.name)}" required></label>
-    <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.1" step="any" inputmode="decimal" value="${x.qty || 1}"></label>
+    <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.01" step="any" inputmode="decimal" value="${x.qty || 1}"></label>
       <label class="fld"><span>Meal</span>${mealSelect(x.meal)}</label></div>
     <div class="fld"><span>Days</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${(x.days||[]).includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${(x.days||[]).join(",")}">
       <div class="chips" style="margin-top:6px"><button type="button" class="link" data-days="0,1,2,3,4,5,6" style="padding:2px 0">Every day</button><button type="button" class="link" data-days="1,2,3,4,5" style="padding:2px 0">Weekdays</button><button type="button" class="link" data-days="0,6" style="padding:2px 0">Weekends</button></div></div>
-    <div class="sub" style="margin:-2px 0 8px" id="fs-serv">Per serving</div>
-    <div class="two"><label class="fld"><span>Calories</span><input name="kcal" type="number" min="0" step="any" inputmode="decimal" value="${x.kcal}" required></label>
-      <label class="fld"><span>Protein (g)</span><input name="p" type="number" min="0" step="any" inputmode="decimal" value="${x.p}"></label></div>
-    <div class="two"><label class="fld"><span>Carbs (g)</span><input name="c" type="number" min="0" step="any" inputmode="decimal" value="${x.c}"></label>
-      <label class="fld"><span>Fat (g)</span><input name="f" type="number" min="0" step="any" inputmode="decimal" value="${x.f}"></label></div>
+    ${nutFields(x)}
     ${id ? `<div class="sub">Changes apply from now on. Days you already checked off keep their numbers.</div>` : ""}`,
     f => {
-      const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories per serving.";
+      const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories.";
       const days = f.days.value.split(",").filter(v => v !== "").map(Number); if (!days.length) return "Pick at least one day.";
-      const n = v => Math.max(0, Number(v) || 0);
-      put(id || uid(), {...(id ? items[id] : {kind: "foodRepeat", created: Date.now()}), name, qty: Math.max(0.1, Number(f.qty.value) || 1), meal: f.meal.value, days, kcal: n(f.kcal.value), p: n(f.p.value), c: n(f.c.value), f: n(f.f.value)});
-      if (!myFoods().some(m => m.name.toLowerCase() === name.toLowerCase())) put(uid(), {kind: "foodItem", name, kcal: n(f.kcal.value), p: n(f.p.value), c: n(f.c.value), f: n(f.f.value), last: Date.now()}, {silent: true});
+      const P = f._sc.per();
+      put(id || uid(), {...(id ? items[id] : {kind: "foodRepeat", created: Date.now()}), name, qty: f._sc.qty, meal: f.meal.value, days, ...P});
+      if (!myFoods().some(m => m.name.toLowerCase() === name.toLowerCase())) put(uid(), {kind: "foodItem", name, ...P, last: Date.now()}, {silent: true});
     },
     id ? () => confirmSheet("Delete this repeat?", "It stops showing on Today. Days you already logged keep their entries.", () => del(id)) : null);
   const S = $(".sheet");
-  wireFoodSearch(S); wireMealSelect(S);
+  wireScaler(S, x); wireFoodSearch(S); wireMealSelect(S);
   S.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const m = items[b.dataset.pick]; if (!m) return;
-    S.querySelector("[name=name]").value = m.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = m[k] ?? "");
+    S.querySelector("[name=name]").value = m.name; S._sc.set(m);
     S.querySelectorAll("[data-pick]").forEach(y => y.classList.toggle("on", y === b)); });
   S.querySelectorAll("[data-days]").forEach(b => b.onclick = () => { const ds = b.dataset.days.split(","); const dp = S.querySelector("[data-daypick]");
     dp.querySelectorAll("button").forEach(x => x.classList.toggle("on", ds.includes(x.dataset.val))); dp.nextElementSibling.value = ds.join(","); });
@@ -1603,32 +1627,28 @@ function foodEntrySheet(meal, editId){
     ${cur ? "" : `<div class="fld"><span>Search foods</span><div class="quick" style="margin-top:0"><input id="fs-q" placeholder="Search" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-fs-go>Search</button>${"BarcodeDetector" in window ? `<button type="button" class="btn" data-fs-scan aria-label="Scan barcode">Scan</button>` : ""}</div><div id="fs-out" class="fsout"></div></div>`}
     ${!cur && recent.length ? `<div class="fld"><span>My foods</span><div class="chips" style="margin-top:0">${recent.map(x => `<button type="button" class="chip" data-pick="${x.id}">${esc(x.name)}</button>`).join("")}</div></div>` : ""}
     <label class="fld"><span>Food</span><input name="name" value="${esc(e.name)}" required></label>
-    <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.1" step="any" inputmode="decimal" value="${e.qty || 1}"></label>
+    <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.01" step="any" inputmode="decimal" value="${e.qty || 1}"></label>
       <label class="fld"><span>Meal</span>${mealSelect(e.meal)}</label></div>
-    <div class="sub" style="margin:-2px 0 8px" id="fs-serv">Per serving</div>
-    <div class="two"><label class="fld"><span>Calories</span><input name="kcal" type="number" min="0" step="any" inputmode="decimal" value="${e.kcal}" required></label>
-      <label class="fld"><span>Protein (g)</span><input name="p" type="number" min="0" step="any" inputmode="decimal" value="${e.p}"></label></div>
-    <div class="two"><label class="fld"><span>Carbs (g)</span><input name="c" type="number" min="0" step="any" inputmode="decimal" value="${e.c}"></label>
-      <label class="fld"><span>Fat (g)</span><input name="f" type="number" min="0" step="any" inputmode="decimal" value="${e.f}"></label></div>
+    ${nutFields(e)}
     ${cur ? "" : `<label class="fld" style="display:flex;align-items:center;gap:12px"><span style="margin:0;flex:1">Save to My foods</span><input type="checkbox" class="switch" name="keep" checked></label>`}`,
     f => {
-      const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories per serving.";
-      const n = x => Math.max(0, Number(x) || 0);
-      const entry = {id: cur ? cur.id : uid(), name, qty: Math.max(0.1, Number(f.qty.value) || 1), meal: f.meal.value, kcal: n(f.kcal.value), p: n(f.p.value), c: n(f.c.value), f: n(f.f.value), at: cur ? cur.at : Date.now()};
+      const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories.";
+      const P = f._sc.per();
+      const entry = {id: cur ? cur.id : uid(), name, qty: f._sc.qty, meal: f.meal.value, ...P, at: cur ? cur.at : Date.now()};
       const dd = dayDoc(d), list = (dd.eats || []).filter(x => x.id !== entry.id).concat([entry]);
       const meals = {...(dd.meals || {})}; if (cfg().meals.list.some(m => m.id === entry.meal)) meals[entry.meal] = true;
       setDay(d, {eats: list, meals});
       if (!cur && f.keep.checked){
         const ex = myFoods().find(x => x.name.toLowerCase() === name.toLowerCase());
-        const body = {kind: "foodItem", name, kcal: entry.kcal, p: entry.p, c: entry.c, f: entry.f, last: Date.now()};
+        const body = {kind: "foodItem", name, ...P, last: Date.now()};
         put(ex ? ex.id : uid(), {...(ex ? items[ex.id] : {}), ...body}, {silent: true});
       }
     },
     cur ? () => { const dd = dayDoc(d); setDay(d, {eats: (dd.eats || []).filter(x => x.id !== editId)}); } : null);
   const S = $(".sheet");
-  wireFoodSearch(S); wireMealSelect(S);
+  wireScaler(S, e); wireFoodSearch(S); wireMealSelect(S);
   S.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const x = items[b.dataset.pick]; if (!x) return;
-    S.querySelector("[name=name]").value = x.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = x[k] ?? "");
+    S.querySelector("[name=name]").value = x.name; S._sc.set(x);
     S.querySelectorAll("[data-pick]").forEach(y => y.classList.toggle("on", y === b)); });
 }
 function foodItemSheet(id){
