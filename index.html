@@ -2610,13 +2610,13 @@ function petScreen(P, frame){
   const dark = !P.lights;
   if (P.dead){ r.push(paintGrid(SPR.grave.split("\n"), 16, 15)); }
   else if (petGame){
-    const lk = petGame.look, G = petGrid(P), h = G.length;
+    const lk = petGame.look, G = petGrid(P), h = G.length / (G.k || 1);
     r.push(paintGrid(G, 12, 24 - h, {flip: lk === "l", genes: P.genes}));
     if (petGame.res === "hit") r.push(sprRects("heart", 40, 1));
   } else if (P.stage === "egg"){
-    r.push(paintGrid(SPR.egg.split("\n"), 12 + (frame % 2), 24 - sprH("egg"), {genes: P.genes}));
+    { const E = petGrid(P), k = E.k || 1; r.push(paintGrid(E, 12 + (frame % 2), 24 - E.length / k, {genes: P.genes})); }
   } else {
-    const G = petGrid(P), h = G.length, w = G[0].length;
+    const G = petGrid(P), h = G.length / (G.k || 1), w = G[0].length / (G.k || 1);
     const A = petAnim && petAnim.until > Date.now() ? petAnim.kind : null;
     let x = P.asleep ? 12 : A ? 16 : petX, y = 24 - h - (!P.asleep && frame % 2 && !A ? 1 : 0);
     if (A === "meal" || A === "snack"){ const f = Math.floor((petAnim.until - Date.now()) / 400); r.push(sprRects(A, 4, 24 - sprH(A) - 1)); if (f % 2) y -= 1; }
@@ -2652,7 +2652,7 @@ function petTick(){
   petFrame++;
   const P = pet(); if (!P) return;
   if (!P.asleep && !petGame && !(petAnim && petAnim.until > Date.now())){
-    const w = petGrid(P)[0].length; if (petRng(P, petFrame, 11) < 0.25) petDir = -petDir;
+    const PG = petGrid(P), w = PG[0].length / (PG.k || 1); if (petRng(P, petFrame, 11) < 0.25) petDir = -petDir;
     petX += petDir; if (petX < 0){ petX = 0; petDir = 1; } if (petX > 48 - w - 9){ petX = 48 - w - 9; petDir = -1; }
   }
   if (petAnim && petAnim.until <= Date.now()) petAnim = null;
@@ -2798,21 +2798,35 @@ function mixGenes(A, B, r = Math.random){
 }
 /* procedural body -> grid of chars: # outline, l fill, s shade, w shine, e eye, b cheek */
 const CG = new Map();
+const PK = 2, PN = 24 * PK;
+const kxy = k => [k & 63, k >> 6];
+const newG = () => Array.from({length: PN}, () => Array(PN).fill("."));
 function cMask(){ return new Set(); }
-function cEll(m, cx, cy, rx, ry){ for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if (((x + .5 - cx) / rx) ** 2 + ((y + .5 - cy) / ry) ** 2 <= 1) m.add(y * 32 + x); return m; }
-function cTri(m, cx, tip, h, slope = .7){ for (let y = Math.max(0, Math.floor(tip)); y < tip + h && y < 24; y++){ const hw = (y + 1 - tip) * slope; for (let x = 0; x < 24; x++) if (Math.abs(x + .5 - cx) <= hw) m.add(y * 32 + x); } return m; }
+function cEach(fn){ for (let y = 0; y < PN; y++) for (let x = 0; x < PN; x++) fn(x, y, (x + .5) / PK, (y + .5) / PK); }
+function cEll(m, cx, cy, rx, ry){ cEach((x, y, X, Y) => { if (((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1) m.add(y * 64 + x); }); return m; }
+function cEllR(m, cx, cy, rx, ry, deg){ const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); cEach((x, y, X, Y) => { const dx = X - cx, dy = Y - cy, u = dx * c + dy * s, v = -dx * s + dy * c; if ((u / rx) ** 2 + (v / ry) ** 2 <= 1) m.add(y * 64 + x); }); return m; }
+function cTri(m, cx, tip, h, slope = .7){ cEach((x, y, X, Y) => { if (Y >= tip && Y < tip + h && Math.abs(X - cx) <= (Y - tip + .3) * slope) m.add(y * 64 + x); }); return m; }
+function cRect(m, x0, y0, x1, y1){ cEach((x, y, X, Y) => { if (X >= x0 && X < x1 && Y >= y0 && Y < y1) m.add(y * 64 + x); }); return m; }
+function cLine(m, x0, y0, x1, y1, w){ const dx = x1 - x0, dy = y1 - y0, L = dx * dx + dy * dy || 1; cEach((x, y, X, Y) => { const t = Math.max(0, Math.min(1, ((X - x0) * dx + (Y - y0) * dy) / L)), px = x0 + t * dx - X, py = y0 + t * dy - Y; if (px * px + py * py <= (w / 2) ** 2) m.add(y * 64 + x); }); return m; }
+function cPoly(m, pts){ cEach((x, y, px, py) => { let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside; }
+  if (inside) m.add(y * 64 + x); }); return m; }
+const isEdge = (m, x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !m.has((y + dy) * 64 + x + dx) || x + dx < 0 || x + dx >= PN);
 function cLayer(g, m, {hl = true, shade = .35} = {}){
   if (!m.size) return;
-  let x0 = 99, x1 = -1, y0 = 99, y1 = -1; m.forEach(k => { const x = k % 32, y = k >> 5; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+  let x0 = 999, x1 = -1, y0 = 999, y1 = -1; m.forEach(k => { const [x, y] = kxy(k); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
   const cx = (x0 + x1 + 1) / 2, cy = (y0 + y1 + 1) / 2, rx = (x1 - x0 + 1) / 2, ry = (y1 - y0 + 1) / 2;
-  m.forEach(k => { const x = k % 32, y = k >> 5; if (y < 0 || y > 23) return;
-    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !m.has((y + dy) * 32 + x + dx) || x + dx < 0 || x + dx > 23);
-    if (edge){ g[y][x] = "#"; return; }
+  m.forEach(k => { const [x, y] = kxy(k); if (y < 0 || y >= PN) return;
+    if (isEdge(m, x, y)){ g[y][x] = "#"; return; }
     const nx = (x + .5 - cx) / rx, ny = (y + .5 - cy) / ry, d = nx * .6 + ny;
-    const shine = hl && ((x + .5 - (cx - rx * .42)) / Math.max(1.05, rx * .17)) ** 2 + ((y + .5 - (cy - ry * .46)) / Math.max(.8, ry * .13)) ** 2 <= 1;
+    const shine = hl && ((x + .5 - (cx - rx * .42)) / Math.max(1.6, rx * .17)) ** 2 + ((y + .5 - (cy - ry * .46)) / Math.max(1.2, ry * .13)) ** 2 <= 1;
     g[y][x] = shine ? "w" : d > Math.max(shade, .55) ? "s" : "l"; });
 }
-function cPut(g, x, y, rows, onBody = false){ rows.forEach((r, j) => [...r].forEach((ch, i) => { const X = x + i, Y = y + j; if (ch === " " || ch === "." || Y < 0 || Y > 23 || X < 0 || X > 23) return; if (onBody && !"lsw".includes(g[Y][X])) return; g[Y][X] = ch; })); }
+function cFlat(g, m, cls){ m.forEach(k => { const [x, y] = kxy(k); g[y][x] = isEdge(m, x, y) ? "#" : cls((x + .5) / PK - .5, (y + .5) / PK - .5); }); }
+function cPut(g, x, y, rows, onBody = false){ rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch === " " || ch === ".") return;
+  for (let a = 0; a < PK; a++) for (let b = 0; b < PK; b++){ const X = (x + i) * PK + a, Y = (y + j) * PK + b; if (Y < 0 || Y >= PN || X < 0 || X >= PN) continue; if (onBody && !"lsw".includes(g[Y][X])) continue; g[Y][X] = ch; } })); }
+function hiPut(g, X0, Y0, rows, onBody = false){ rows.forEach((r, j) => [...r].forEach((ch, i) => { const X = X0 + i, Y = Y0 + j; if (ch === "." || ch === " " || Y < 0 || Y >= PN || X < 0 || X >= PN) return; if (onBody && !"lhsdwpq".includes(g[Y][X])) return; g[Y][X] = ch; })); }
+function cInk(g, m, ch = "#"){ m.forEach(k => { const [x, y] = kxy(k); g[y][x] = ch; }); }
 const EYES = {round: ["we", "ee", "ee"], sparkle: ["we", "ee", "ew"], dot: ["  ", "ee", "ee"]};
 function faceOn(g, G, rx, cy, ry, cx = 12){
   const gap = Math.max(2, Math.round(rx * .32)), lx = Math.round(cx) - 2 - gap, rxE = Math.round(cx) + gap, ey = Math.round(cy - ry * .12) - 1;
@@ -2823,27 +2837,37 @@ function faceOn(g, G, rx, cy, ry, cx = 12){
   const M = {smile: ["#..#", ".##."], cat: ["#.##.#", ".#..#."], open: [".##.", "#..#", ".##."], small: ["##"], tooth: ["####", ".#.."]}[G.mouth] || ["#..#", ".##."];
   cPut(g, Math.round(cx) - Math.floor(M[0].length / 2), ey + 4, M);
 }
-const EYE_P = {dot: ["ee", "ee"], big: ["we", "ee", "ee"], bar: ["e", "e", "e"], tiny: ["e"], happy: [".ee.", "e..e"], sleepy: ["eee"], wide: ["wee", "eee"]};
-const MOUTH_P = {w: ["#.#.#", ".#.#."], o: [".#.", "#.#", ".#."], grin: ["######", "#bbbb#", ".####."], smile: ["#..#", ".##."], line: ["###"], tongue: ["#..#", ".##.", ".bb."], teeth: [".##.", "#ww#"], cat: ["#.##.#", ".#..#."], small: ["##"], none: []};
+const EYE_P = {
+  dot: [".ee.", "ewee", "eeee", ".ee."],
+  big: [".eee.", "ewwee", "ewwee", "eeeee", "eeeee", ".eee."],
+  wide: [".eeee.", "ewweee", "ewweee", "eeeeee", ".eeee."],
+  bar: [".e.", "ewe", "eee", "eee", "eee", ".e."],
+  tiny: ["ee", "ee"],
+  happy: ["..ee..", ".eeee.", "ee..ee", "e....e"],
+  sleepy: ["e....e", ".eeee."],
+};
+const MOUTH_P = {
+  smile: ["#....#", ".#..#.", "..##.."], small: ["#..#", ".##."], o: [".##.", "#bb#", "#bb#", ".##."],
+  grin: ["########", "#bbbbbb#", ".#bbbb#.", "..####.."], cat: ["#..##..#", ".##..##."],
+  tongue: ["#......#", ".######.", "..#bb#..", "...##..."], teeth: ["#......#", ".######.", "..#ww#..", "..####.."], line: ["####"], none: [],
+};
 function faceX(g, F, cx, top, rx, h, tier){
   const E = EYE_P[tier === 5 ? "sleepy" : F.eye] || EYE_P.dot, ew = E[0].length, eh = E.length, M = MOUTH_P[F.mouth] || [];
-  const ey = Math.round(top + F.ey * h), side = F.view === "left" ? -1 : F.view === "right" ? 1 : 0;
-  const onBody = (x, y) => "lhsdwpq".includes((g[y] || [])[x]);
-  const stamp = (x0, y0, rows) => rows.forEach((r, j) => [...r].forEach((c, i) => { if (c !== "." && (g[y0 + j] || [])[x0 + i] !== undefined) g[y0 + j][x0 + i] = c; }));
-  if (side){ const exc = cx + side * F.gap * rx, ex = Math.round(exc - ew / 2); stamp(ex, ey, E);
-    if (F.cheeks) [0, 1].forEach(i => { const x = ex + (side > 0 ? -2 + i : ew + i), y = ey + eh; if (onBody(x, y)) g[y][x] = "b"; });
-    if (M.length){ let mx = Math.round(cx + side * rx * .78 - (side > 0 ? M[0].length - 1 : 0)); stamp(mx, ey + eh + (F.mgap ?? 1), M); }
+  const ey = Math.round((top + F.ey * h) * PK), side = F.view === "left" ? -1 : F.view === "right" ? 1 : 0, mg = (F.mgap ?? 1) * 2;
+  const cheek = (x, y) => hiPut(g, x, y, ["bbbb", ".bb."], true);
+  if (side){ const ex = Math.round((cx + side * F.gap * rx) * PK - ew / 2); hiPut(g, ex, ey, E);
+    if (F.cheeks) cheek(side > 0 ? ex - 4 : ex + ew, ey + eh + 1);
+    if (M.length) hiPut(g, Math.round((cx + side * rx * .8) * PK - (side > 0 ? M[0].length : 0)), ey + eh + mg, M);
     return; }
-  const lx = Math.round(cx - F.gap * rx - ew / 2), rxe = Math.round(cx + F.gap * rx - ew / 2);
-  stamp(lx, ey, E); stamp(rxe, ey, E.map(r => F.mirror ? [...r].reverse().join("") : r));
-  if (F.cheeks) [[lx - 2, ey + eh], [lx - 1, ey + eh], [rxe + ew, ey + eh], [rxe + ew + 1, ey + eh]].forEach(([x, y]) => { if (onBody(x, y)) g[y][x] = "b"; });
-  if (M.length) stamp(Math.round(cx - M[0].length / 2), ey + eh + (F.mgap ?? 1), M);
+  const lx = Math.round((cx - F.gap * rx) * PK - ew / 2), rxe = Math.round((cx + F.gap * rx) * PK - ew / 2);
+  hiPut(g, lx, ey, E); hiPut(g, rxe, ey, E);
+  if (F.cheeks){ cheek(lx - 4, ey + eh + 1); cheek(rxe + ew, ey + eh + 1); }
+  if (M.length) hiPut(g, Math.round(cx * PK - M[0].length / 2), ey + eh + mg, M);
 }
-function armsOn(g, G, cy, ry){ if (G.arms !== "nubs") return; const ay = Math.round(cy + ry * .2), row = g[ay]; if (!row) return; const l = row.indexOf("#"), r = row.lastIndexOf("#"); if (l > 1) cPut(g, l - 2, ay - 1, [".#", "#l", ".#"]); if (r > -1 && r < 22) cPut(g, r + 1, ay - 1, ["#.", "l#", "#."]); }
-function cPoly(m, pts){ for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){ const px = x + .5, py = y + .5; let inside = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside; }
-  if (inside) m.add(y * 32 + x); } return m; }
-function cFlat(g, m, cls){ m.forEach(k => { const x = k % 32, y = k >> 5; const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !m.has((y + dy) * 32 + x + dx)); g[y][x] = edge ? "#" : cls(x, y); }); }
+function armsOn(g, G, cy, ry){ if (G.arms !== "nubs") return; const ay = Math.round((cy + ry * .2) * PK), row = g[ay]; if (!row) return;
+  const l = row.indexOf("#"), r = row.lastIndexOf("#");
+  if (l > 2) cLayer(g, cEll(cMask(), l / PK - .4, ay / PK, 1.3, 1.6), {hl: false});
+  if (r > -1 && r < PN - 3) cLayer(g, cEll(cMask(), (r + 1) / PK + .4, ay / PK, 1.3, 1.6), {hl: false}); }
 function feetOn(g, G, f, bottom){
   const L = [];
   if (G.feet === "stubby") L.push(cEll(cMask(), 12 - 4 * f, bottom + .9, 2.8 * f + .2, 2.1), cEll(cMask(), 12 + 4 * f, bottom + .9, 2.8 * f + .2, 2.1));
@@ -2852,8 +2876,10 @@ function feetOn(g, G, f, bottom){
   L.forEach(m => cLayer(g, m, {hl: false}));
 }
 function hashR(seed){ let s = (seed || 1) % 2147483647; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function starAt(g, cx, cy, r, fill = "y"){ const pts = []; for (let i = 0; i < 10; i++){ const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * .45 : r; pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]); } cFlat(g, cPoly(cMask(), pts), () => fill); }
+const inB = (g, x, y) => "lhsdw".includes((g[y] || [])[x]);
 function gemGrid(G, stage, tier, f){
-  const g = Array.from({length: 24}, () => Array(24).fill(".")), body = G.gbody, v = stage === "baby" ? "none" : G.gvar;
+  const g = newG(), body = G.gbody, v = stage === "baby" ? "none" : G.gvar;
   const bottom = G.feet === "none" ? 23 : 21.2;
   let rx, ry, cy, top;
   if (G.feet !== "none") feetOn(g, {...G, feet: "tiny"}, f, bottom);
@@ -2875,68 +2901,64 @@ function gemGrid(G, stage, tier, f){
     const m = cPoly(cMask(), [[12 - rx + c1, top], [12 + rx - c2, top + .4], [12 + rx, top + c2 + .4], [12 + rx, cy + ry - c3], [12 + rx - c3, cy + ry], [12 - rx + c4, cy + ry], [12 - rx, cy + ry - c4], [12 - rx, top + c1]]);
     cFlat(g, m, (x, y) => { const dx = (x + .5 - 11.2) / rx, dy = (y + .5 - cy + .6) / ry;
       if (Math.abs(dx) < .52 && Math.abs(dy) < .46) return "h"; return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "l" : "s") : (dx < 0 ? "l" : "s"); });
-    g[Math.round(cy - ry * .32)][Math.round(12 - rx * .32)] = "w";
+    hiPut(g, Math.round((12 - rx * .4) * PK), Math.round((cy - ry * .4) * PK), ["ww", "w."], true);
   } else {
     const m = cEll(cMask(), 12, cy, rx, ry); cEll(m, 12 - rx * .35, cy - ry * .45, rx * .55, ry * .6); cEll(m, 12 + rx * .4, cy + ry * .1, rx * .62, ry * .85);
     cLayer(g, m);
-
   }
-  const inBody = (x, y) => "lhsdw".includes((g[y] || [])[x]);
-
-  if (v === "ore"){ const r = hashR(G.ps); for (let i = 0; i < 6; i++){ const x = Math.round(12 + (r() - .5) * rx * 1.4), y = Math.round(cy + (r() - .2) * ry * .9); if (inBody(x, y)) g[y][x] = "p"; if (inBody(x + 1, y) && r() < .6) g[y][x + 1] = "q"; } }
-  if (v === "geode"){ const band = top + 3.6 * f; for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if (inBody(x, y) && y + .5 < band + (x % 3 === 1 ? -.9 : 0)) g[y][x] = (x + y) % 3 === 0 ? "w" : (x + y) % 2 ? "p" : "q";
-    for (let x = 0; x < 24; x++){ const y = Math.round(band + (x % 3 === 1 ? -.9 : 0)); if (inBody(x, y)) g[y][x] = "#"; } }
-  if (v === "moss"){ for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){ const lim = top + 2.4 * f + (Math.sin(x * 1.3) + 1) * .9 + (x % 5 === 2 ? 1.4 : 0); if (inBody(x, y) && y + .5 < lim) g[y][x] = y + .5 > lim - 1 ? "x" : "v"; } }
+  if (v === "ore"){ const r = hashR(G.ps); for (let i = 0; i < 6; i++){ const x = Math.round((12 + (r() - .5) * rx * 1.4) * PK), y = Math.round((cy + (r() - .2) * ry * .9) * PK); hiPut(g, x, y, ["pp", "pq"], true); } }
+  if (v === "geode"){ const band = top + 3.6 * f; cEach((x, y, X, Y) => { const edge = band + (Math.floor(X) % 3 === 1 ? -.9 : 0); if (inB(g, x, y) && Y < edge) g[y][x] = (x + y) % 5 === 0 ? "w" : (Math.floor(X) + Math.floor(Y)) % 2 ? "p" : "q"; });
+    for (let x = 0; x < PN; x++){ const X = (x + .5) / PK, y = Math.round((band + (Math.floor(X) % 3 === 1 ? -.9 : 0)) * PK); if (inB(g, x, y)) g[y][x] = "#"; } }
+  if (v === "moss"){ cEach((x, y, X, Y) => { const lim = top + 2.4 * f + (Math.sin(X * 1.3) + 1) * .9 + (Math.floor(X) % 5 === 2 ? 1.4 : 0); if (inB(g, x, y) && Y < lim) g[y][x] = Y > lim - .7 ? "x" : "v"; }); }
   if (body === "cut") faceX(g, {eye: "big", gap: .36, ey: .3, mouth: "grin", cheeks: true}, 11.4, top, rx, 2 * ry, tier);
-  else if (body === "pebble") faceX(g, {view: "right", eye: "big", gap: .42, ey: .3, mouth: "line", mgap: 1, cheeks: true}, 12.6, top, rx, 2 * ry, tier);
-  else faceX(g, {eye: "bar", gap: .34, ey: .4, mouth: "small", mgap: 1, cheeks: true}, 12, top, rw, bottom - top, tier);
+  else if (body === "pebble") faceX(g, {view: "right", eye: "big", gap: .42, ey: .3, mouth: "small", mgap: 1, cheeks: true}, 12.6, top, rx, 2 * ry, tier);
+  else faceX(g, {eye: "bar", gap: .34, ey: .38, mouth: "small", mgap: 1, cheeks: true}, 12, top, rw, bottom - top, tier);
   armsOn(g, G, cy, ry);
-  if (stage === "adult" && tier === 1) cPut(g, 1, Math.max(0, Math.round(top)), [".#.", "###", ".#."]);
+  if (stage === "adult" && tier === 1) starAt(g, 2.6, Math.max(2, top + 1), 2.2);
   return g;
 }
 function plantGrid(G, stage, tier, f){
-  const g = Array.from({length: 24}, () => Array(24).fill(".")), body = G.pbody, v = stage === "baby" ? "sprout" : G.pvar;
+  const g = newG(), body = G.pbody, v = stage === "baby" ? "sprout" : G.pvar;
   const capH = v === "mushroom" ? 2 : v === "bloom" ? 8 : v === "sprout" ? 6 : 2;
   let bottom = (G.feet === "none" || body === "pot") ? 23 : 21.2, rx, ry, cy, top;
   if (body !== "pot" && G.feet !== "none") feetOn(g, {...G, feet: G.feet === "long" ? "stubby" : G.feet}, f, bottom);
   if (body === "cactus"){
     const rw = 6.2 * f + .5, H = Math.min(16 * f + 1, bottom - capH - .5); top = bottom - H; rx = rw; ry = H / 2; cy = top + H / 2;
     if (stage !== "baby"){ const ax = 12 - rw - 1.9 * f, ay = top + H * .3, arm = cEll(cMask(), ax, ay + 1.6 * f, 1.7 * f + .3, 3.2 * f);
-      for (let y = Math.round(ay + 3 * f); y < Math.round(ay + 5.2 * f); y++) for (let x = Math.round(ax - 1); x < Math.round(12 - rw + 1); x++) arm.add(y * 32 + x);
+      cRect(arm, ax - .2, ay + 3 * f, 12 - rw + 1, ay + 5.2 * f); cEll(arm, ax, ay + 3.9 * f, 1.7 * f + .3, 1.3 * f);
       cLayer(g, arm, {hl: false}); cLayer(g, cEll(cMask(), 12 + rw + .5, top + H * .66, 1.5 * f + .2, 1.4 * f + .2), {hl: false}); }
-    const m = cEll(cMask(), 12, top + rw, rw, rw); for (let y = Math.ceil(top + rw); y < bottom - 1; y++) for (let x = Math.round(12 - rw); x < Math.round(12 + rw); x++) m.add(y * 32 + x);
-    cEll(m, 12, bottom - 1.6, rw, 1.6); cLayer(g, m);
-    for (let y = Math.round(top + 3); y < bottom - 2; y++) for (const x of [Math.round(12 - rw * .45), Math.round(12 + rw * .45) - 1]) if (g[y][x] === "l" || g[y][x] === "s") g[y][x] = "s";
+    const m = cEll(cMask(), 12, top + rw, rw, rw); cRect(m, 12 - rw, top + rw, 12 + rw, bottom - 1.6); cEll(m, 12, bottom - 1.6, rw, 1.6); cLayer(g, m);
+    for (const X of [12 - rw * .45, 12 + rw * .45]) cEach((x, y, XX, Y) => { if (Math.abs(XX - X) < .3 && Y > top + 3 && Y < bottom - 2 && "ls".includes(g[y][x])) g[y][x] = "s"; });
   } else if (body === "pot"){
     rx = 8.4 * f + .4; ry = 6.4 * f + .3; const potH = 6 * f + 1, potTop = bottom - potH; cy = potTop - ry * .55; top = cy - ry;
     cLayer(g, cEll(cMask(), 12, cy, rx, ry));
     const pw = rx * .95, m = cPoly(cMask(), [[12 - pw, potTop], [12 + pw, potTop], [12 + pw * .78 + .6, bottom], [12 - pw * .78 + .6, bottom]]);
     const rim = cPoly(cMask(), [[12 - pw - 1, potTop - 1.4], [12 + pw + 1, potTop - .6], [12 + pw + 1, potTop + 1.8], [12 - pw - 1, potTop + 1.2]]);
-    const chip = [Math.round(12 + pw * .2), Math.round(potTop + 3 * f)];
     cFlat(g, m, (x) => x + .5 > 12 + pw * .35 ? "q" : "p"); cFlat(g, rim, (x) => x + .5 > 12 + pw * .5 ? "q" : "p");
-    void chip;
   } else {
     rx = 9 * f + .4; ry = 7.2 * f + .3; cy = bottom - ry; top = cy - ry * 1.15;
     if (stage !== "baby"){ const root = cMask(); [[.62, .78, 1.6], [.88, .92, 1.25], [1.08, .78, 1]].forEach(([u, w, r]) => cEll(root, 12 + rx * u, cy + ry * w, r * f + .2, r * f + .2)); cLayer(g, root, {hl: false}); }
     const m = cEll(cMask(), 11.6, cy, rx, ry); cEll(m, 12.4, cy - ry * .78, rx * .42, ry * .5); cLayer(g, m);
   }
-  const tY = Math.round(top), inBody = (x, y) => "lhsdw".includes((g[y] || [])[x]);
-  if (v === "sprout") cPut(g, 4, tY - 7, [".####.........", "#vvvv#........", "#vvvvv#...###.", ".#xvvvx#.#vvv#", "..#####.#xvvx#", ".......##.###.", ".......##....."]);
-  if (v === "bloom") cPut(g, 9, tY - 8, ["...###...", "..#ppp#..", ".##ppp##.", "#pp#y#pp#", "#pp#y#pp#", ".##ppp##.", "..#ppp#..", "...###.##", "...#..#vv#", "...#...##"]);
-  if (v === "spiky"){ g.forEach((row, y) => row.forEach((c, x) => { if (c === "#" && y < cy + ry * .5 && (x * 7 + y * 3) % 5 === 0){ const ox = x < 12 ? -1 : 1; if (g[y][x + ox] === ".") g[y][x + ox] = "#"; } }));
-    cPut(g, 10, tY - 2, [".pp.", "pyyp", ".pp."]); }
-  if (v === "mushroom"){ const cr = rx + 2.2, m = cEll(cMask(), 12.8, top + 2.4, cr, 4.6 * f + .8), keep = new Set(); m.forEach(k => { if ((k >> 5) <= top + 2.6) keep.add(k); });
-    cFlat(g, keep, (x, y) => x + .5 > 12 + cr * .45 ? "q" : "p"); [[12 - cr * .45, top - 1], [12 + cr * .1, top - 2.2], [12 + cr * .5, top]].forEach(([x, y]) => { const X = Math.round(x), Y = Math.round(y); if ((g[Y] || [])[X] === "p" || (g[Y] || [])[X] === "q") g[Y][X] = "w"; }); }
+  const leaf = (cx, cy2, rx2, ry2, deg) => cFlat(g, cEllR(cMask(), cx, cy2, rx2, ry2, deg), (x, y) => (y + .5) > cy2 + .2 ? "x" : "v");
+  if (v === "sprout"){ cFlat(g, cRect(cMask(), 11.6, top - 2.6, 12.6, top + .8), () => "v"); leaf(9.2, top - 3.4, 3.4 * Math.max(f, .7), 1.7, -22); leaf(14.8, top - 2.6, 2.5 * Math.max(f, .7), 1.4, 24); }
+  if (v === "bloom"){ cInk(g, cLine(cMask(), 12.4, top + .6, 13.4, top - 3.2, .6)); leaf(14.6, top - 1.6, 1.8, 1, 30);
+    const fx = 13.6, fy = top - 5.2; [0, 72, 144, 216, 288].forEach(a => { const r = a * Math.PI / 180; cFlat(g, cEll(cMask(), fx + Math.cos(r - Math.PI / 2) * 1.8, fy + Math.sin(r - Math.PI / 2) * 1.8, 1.45, 1.45), (x, y) => (x + .5 > fx + .6 && y + .5 > fy) ? "q" : "p"); });
+    cFlat(g, cEll(cMask(), fx, fy, 1.1, 1.1), () => "y"); }
+  if (v === "spiky"){ const r = hashR(G.ps || 3); g.forEach((row, y) => row.forEach((c, x) => { if (c === "#" && y < (cy + ry * .5) * PK && r() < .07){ const ox = x < 12 * PK ? -1 : 1; if (g[y][x + ox] === "."){ g[y][x + ox] = "#"; if (g[y][x + 2 * ox] === ".") g[y][x + 2 * ox] = "#"; } } }));
+    [0, 120, 240].forEach(a => { const rr = a * Math.PI / 180; cFlat(g, cEll(cMask(), 12.2 + Math.cos(rr - Math.PI / 2) * 1.1, top - .8 + Math.sin(rr - Math.PI / 2) * 1.1, 1, 1), () => "p"); });
+    cFlat(g, cEll(cMask(), 12.2, top - .8, .7, .7), () => "y"); }
+  if (v === "mushroom"){ const cr = rx + 2.2, m = cEll(cMask(), 12.8, top + 2.4, cr, 4.6 * f + .8), keep = new Set(); m.forEach(k => { const [, y] = kxy(k); if ((y + .5) / PK <= top + 2.6) keep.add(k); });
+    cFlat(g, keep, (x, y) => x + .5 > 12 + cr * .45 ? "q" : "p"); [[12 - cr * .45, top - 1], [12 + cr * .1, top - 2.2], [12 + cr * .5, top]].forEach(([x, y]) => { const m2 = cEll(cMask(), x, y, .8, .7); m2.forEach(k => { const [X, Y] = kxy(k); if ("pq".includes(g[Y][X])) g[Y][X] = "w"; }); }); }
   if (body === "bulb") faceX(g, {eye: "dot", gap: .44, ey: .56, mouth: "smile", cheeks: true}, 11.6, top, rx, bottom - top, tier);
-  else if (body === "cactus") faceX(g, {eye: "dot", gap: .26, ey: .2, mouth: "small", cheeks: true}, 12, top, rx, bottom - top, tier);
-  else faceX(g, {eye: "wide", gap: .36, ey: .42, mouth: "none", cheeks: true, mirror: false}, 12, top, rx, 2 * ry, tier);
+  else if (body === "cactus") faceX(g, {eye: "dot", gap: .3, ey: .2, mouth: "small", cheeks: true}, 12, top, rx, bottom - top, tier);
+  else faceX(g, {eye: "wide", gap: .38, ey: .42, mouth: "none", cheeks: true}, 12, top, rx, 2 * ry, tier);
   if (body !== "pot") armsOn(g, G, cy, ry);
-  if (stage === "adult" && tier === 1) cPut(g, 1, Math.max(0, tY), [".#.", "###", ".#."]);
-  void inBody;
+  if (stage === "adult" && tier === 1) starAt(g, 2.6, Math.max(2, top + 1), 2.2);
   return g;
 }
 function animalGrid(G, stage, tier, f){
-  const g = Array.from({length: 24}, () => Array(24).fill(".")), v = G.avar || "cat";
+  const g = newG(), v = G.avar || "cat";
   const body = stage === "baby" ? "sit" : (G.abody || "sit"), bottom = 23;
   const earH = v === "bunny" ? 7 * f : v === "cat" ? 3.5 * f : v === "bear" ? 1.5 : 1;
   let hx, hy, rhx, rhy, bx, by, rbx, rby;
@@ -2945,81 +2967,77 @@ function animalGrid(G, stage, tier, f){
   else { rbx = 6 * f + .5; rby = 5 * f + .4; bx = 12.4; by = bottom - rby - .3; rhx = 7 * f + .5; rhy = 6 * f + .4; hx = 11.4; hy = by - rby * .7 - rhy * .55; }
   const over = earH - (hy - rhy); if (over > 0){ hy += over; by += over * .3; }
   const ht = hy - rhy, layer = (m, o) => cLayer(g, m, o);
-  // tail (behind)
   const tx = bx + rbx * .92, ty = by + rby * .2;
-  if (v === "cat"){ const m = cMask(); [[0, 0], [1.4, -1.6], [2.2, -3.6], [1.6, -5.6], [.2, -6.6]].forEach(([dx, dy]) => cEll(m, tx + dx * f, ty + dy * f, 1.35, 1.35)); layer(m, {hl: false}); }
+  if (v === "cat"){ const m = cMask(); [[0, 0], [1.4, -1.6], [2.2, -3.6], [1.6, -5.6], [.2, -6.6]].forEach(([dx, dy]) => cEll(m, tx + dx * f, ty + dy * f, 1.3, 1.3)); layer(m, {hl: false}); }
   if (v === "dog"){ const m = cMask(); cEll(m, tx + .6, ty - 1.2, 1.3, 1.6); cEll(m, tx + 1.8 * f, ty - 3.2 * f, 1.2, 1.7); layer(m, {hl: false}); }
   if (v === "bunny") layer(cEll(cMask(), tx, ty + .6, 2.3 * f + .3, 2.2 * f + .3));
   if (v === "bear") layer(cEll(cMask(), tx - .2, ty + 1, 1.6, 1.5), {hl: false});
-  const ehx = hx;
-  // ears behind head
-  if (v === "cat"){ layer(cTri(cMask(), ehx - rhx * .55, ht - 3.2 * f, 5.4 * f, .72), {hl: false}); layer(cTri(cMask(), ehx + rhx * .55 + .6, ht - 2.6 * f, 4.8 * f, .72), {hl: false}); }
-  if (v === "bunny"){ layer(cEll(cMask(), ehx - 2.6 * f, ht - 3.4 * f, 1.9 * f + .4, 4.8 * f), {hl: false});
-    const m = cEll(cMask(), ehx + 2.8 * f, ht - 1.6 * f, 1.9 * f + .4, 3 * f); cEll(m, ehx + 4.8 * f, ht - 3.8 * f, 2.3 * f, 1.5 * f + .3); layer(m, {hl: false}); }
-  if (v === "bear"){ layer(cEll(cMask(), ehx - rhx * .72, ht + 1.2, 2.6 * f + .2, 2.6 * f + .2), {hl: false}); layer(cEll(cMask(), ehx + rhx * .72, ht + 1.4, 2.6 * f + .2, 2.4 * f + .2), {hl: false}); }
-  if (v === "dog") layer(cEll(cMask(), ehx + rhx * .62, ht + .6, 2.3 * f + .3, 2.4 * f), {hl: false});
-  // legs / body
+  if (v === "cat"){ layer(cTri(cMask(), hx - rhx * .55, ht - 3.2 * f, 5.4 * f, .72), {hl: false}); layer(cTri(cMask(), hx + rhx * .55 + .6, ht - 2.6 * f, 4.8 * f, .72), {hl: false}); }
+  if (v === "bunny"){ layer(cEll(cMask(), hx - 2.6 * f, ht - 3.4 * f, 1.9 * f + .4, 4.8 * f), {hl: false});
+    const m = cEll(cMask(), hx + 2.8 * f, ht - 1.6 * f, 1.9 * f + .4, 3 * f); cEll(m, hx + 4.8 * f, ht - 3.8 * f, 2.3 * f, 1.5 * f + .3); layer(m, {hl: false}); }
+  if (v === "bear"){ layer(cEll(cMask(), hx - rhx * .72, ht + 1.2, 2.6 * f + .2, 2.6 * f + .2), {hl: false}); layer(cEll(cMask(), hx + rhx * .72, ht + 1.4, 2.6 * f + .2, 2.4 * f + .2), {hl: false}); }
+  if (v === "dog") layer(cEll(cMask(), hx + rhx * .62, ht + .6, 2.3 * f + .3, 2.4 * f), {hl: false});
   if (body === "stand"){ layer(cEll(cMask(), bx - 2.4 * f, bottom - 1.8, 1.9 * f + .3, 2.2), {hl: false}); layer(cEll(cMask(), bx + 2.6 * f, bottom - 1.6, 1.9 * f + .3, 2), {hl: false}); }
   layer(cEll(cMask(), bx, by, rbx, rby));
-  if (body === "stand"){ layer(cEll(cMask(), bx - rbx - .2, by + .4, 1.3, 2.1), {hl: false}); layer(cEll(cMask(), bx + rbx + .9, by - 2.6, 1.3, 2.2), {hl: false}); }
-  // head
-  { const hm = cEll(cMask(), hx, hy, rhx, rhy);  layer(hm); }
-  // inner ears
-  const tint = (m, ch) => m.forEach(k => { const x = k % 32, y = k >> 5; if ("lhsw".includes(g[y][x])) g[y][x] = ch; });
-  if (v === "cat"){ tint(cTri(cMask(), ehx - rhx * .55, ht - 1.6 * f, 2.6 * f, .5), "b"); tint(cTri(cMask(), ehx + rhx * .55 + .6, ht - 1 * f, 2.2 * f, .5), "b"); }
-  if (v === "bunny"){ tint(cEll(cMask(), ehx - 2.6 * f, ht - 3.4 * f, .7, 3.4 * f), "b"); }
-  if (v === "bear"){ tint(cEll(cMask(), ehx - rhx * .72, ht + 1.2, 1.2 * f + .2, 1.2 * f + .2), "b"); tint(cEll(cMask(), ehx + rhx * .72, ht + 1.4, 1.2 * f + .2, 1.1 * f + .2), "b"); }
-  // floppy dog ear in front (left)
+  if (body === "stand"){ layer(cEll(cMask(), bx - rbx - .2, by + .4, 1.3, 2.1), {hl: false}); layer(cEllR(cMask(), bx + rbx + .9, by - 2.6, 1.2, 2.3, 20), {hl: false}); }
+  layer(cEll(cMask(), hx, hy, rhx, rhy));
+  const tint = (m, ch) => m.forEach(k => { const [x, y] = kxy(k); if ("lhsw".includes(g[y][x])) g[y][x] = ch; });
+  if (v === "cat"){ tint(cTri(cMask(), hx - rhx * .55, ht - 1.6 * f, 2.6 * f, .5), "b"); tint(cTri(cMask(), hx + rhx * .55 + .6, ht - 1 * f, 2.2 * f, .5), "b"); }
+  if (v === "bunny") tint(cEll(cMask(), hx - 2.6 * f, ht - 3.4 * f, .8, 3.4 * f), "b");
+  if (v === "bear"){ tint(cEll(cMask(), hx - rhx * .72, ht + 1.2, 1.2 * f + .2, 1.2 * f + .2), "b"); tint(cEll(cMask(), hx + rhx * .72, ht + 1.4, 1.2 * f + .2, 1.1 * f + .2), "b"); }
   if (v === "dog"){ const m = cEll(cMask(), hx - rhx * .92, hy - rhy * .15, 2.1 * f + .3, 3.8 * f + .2); cFlat(g, m, (x) => x + .5 > hx - rhx * .92 ? "q" : "p"); }
-  // muzzle
   const mY = hy + rhy * .34;
   if (v === "dog" || v === "bear") tint(cEll(cMask(), hx, mY, 3 * f + .4, 2 * f + .3), "h");
-  // face
   const mouthV = {cat: "cat", dog: "tongue", bunny: "teeth", bear: "smile"}[v];
   const FS = body === "loaf" ? {eye: "dot", gap: .42, ey: .36, mouth: mouthV, mgap: 1, cheeks: true}
     : body === "stand" ? {eye: "happy", gap: .4, ey: .3, mouth: "grin", mgap: 1, cheeks: true}
     : {eye: "big", gap: .4, ey: .3, mouth: mouthV, mgap: 1, cheeks: true};
-  if (v === "dog" || v === "bear") FS.mgap = 0;
+  if (v === "dog" || v === "bear") FS.mgap = 1.5;
   faceX(g, FS, hx, ht, rhx, 2 * rhy, tier);
-  { const ey = Math.round(ht + FS.ey * 2 * rhy), E = EYE_P[FS.eye]; const ny = ey + E.length; const nx = Math.round(hx) - 1;
-    if (v === "dog" || v === "bear") cPut(g, nx, ny, ["##"]);
-    if (v === "cat"){ const row = g[ny] || []; const l = row.indexOf("#"), r = row.lastIndexOf("#"); if (l > 0){ g[ny][l - 1] = "#"; g[ny + 2] && (g[ny + 2][l - 1] = "#"); } if (r > -1 && r < 23){ g[ny][r + 1] = "#"; g[ny + 2] && (g[ny + 2][r + 1] = "#"); } } }
-  // paws
+  const ey = Math.round((ht + FS.ey * 2 * rhy) * PK), E = EYE_P[FS.eye], ny = ey + E.length + 1, nx = Math.round(hx * PK) - 2;
+  if ((v === "dog" || v === "bear") && body !== "stand") hiPut(g, nx, ny, ["####", ".##."]);
+  if (v === "cat"){ [[-1, 0], [-1, 1.2], [1, 0], [1, 1.2]].forEach(([sd, dy]) => { const yy = ny / PK + dy, x0 = hx + sd * (rhx - .2); cInk(g, cLine(cMask(), x0, yy, x0 + sd * 2, yy - .4 + dy * .4, .5)); }); }
   if (body === "sit") [[bx - 2.4 * f, bottom - .9], [bx + 1.6 * f, bottom - .9]].forEach(([x, y]) => layer(cEll(cMask(), x, y, 1.9 * f + .2, 1.3), {hl: false}));
   if (body === "loaf") [[hx - 1.8, bottom - .8], [hx + 2.2, bottom - .8]].forEach(([x, y]) => layer(cEll(cMask(), x, y, 1.8, 1.2), {hl: false}));
-  if (stage === "adult" && tier === 1) cPut(g, 20, 1, [".#.", "###", ".#."]);
+  if (stage === "adult" && tier === 1) starAt(g, 21, 2.6, 2.2);
   return g;
 }
 function rareGrid(G, stage, tier, f){
-  const g = Array.from({length: 24}, () => Array(24).fill(".")), bottom = 22.4;
+  const g = newG(), bottom = 22.4;
   if ((G.rbody || "comet") === "comet"){
     const rx = 6.8 * f + .5, ry = 6.4 * f + .5, cx = 10, cy = bottom - ry;
     const tail = cMask(); [[1.1, -.2, 1], [1.7, -.6, .85], [2.3, -1.1, .68], [2.8, -1.7, .5]].forEach(([u, v, k]) => cEll(tail, cx + rx * u, cy + ry * v, rx * .55 * k + .4, ry * .5 * k + .4));
-    cFlat(g, tail, (x, y) => (x + y) % 5 === 0 ? "w" : y + .5 > cy - ry * .9 + (x - cx) * -.15 ? "q" : "p");
+    cFlat(g, tail, (x, y) => y + .5 > cy - ry * .9 + (x - cx) * -.15 ? "q" : "p");
+    [[1.5, -.9], [2.3, -1.5], [1.9, -.1]].forEach(([u, v]) => hiPut(g, Math.round((cx + rx * u) * PK), Math.round((cy + ry * v) * PK), [".w.", "www", ".w."], true));
     cLayer(g, cEll(cMask(), cx, cy, rx, ry));
-    cPut(g, Math.round(cx) - 2, Math.round(cy - ry) - 3, ["..#..", ".#p#.", "#ppp#", ".#p#."]);
+    starAt(g, cx, cy - ry - .6, 2.4);
     faceX(g, {eye: "big", gap: .38, ey: .34, mouth: "o", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier);
-    if (stage !== "baby") cPut(g, Math.round(cx + rx * 1.6), Math.round(cy - ry * 1.4), [".w.", "w.w", ".w."]);
   } else {
     const rx = 4.6 * f + .6, ry = 6 * f + .5, cx = 12, cy = bottom - ry;
     [-1, 1].forEach(sd => { const w = cEll(cMask(), cx + sd * (rx + 3.4 * f), cy - ry * .35, 4 * f + .6, 4.6 * f + .5); cEll(w, cx + sd * (rx + 2.6 * f), cy + ry * .45, 2.8 * f + .5, 2.8 * f + .3);
-      cFlat(g, w, (x, y) => { const d = (x + .5 - (cx + sd * (rx + 3.6 * f))) ** 2 + (y + .5 - (cy - ry * .4)) ** 2; return d < 2.2 ? "w" : d < 6 ? "q" : "p"; }); });
+      const ex = cx + sd * (rx + 3.6 * f), ey2 = cy - ry * .4;
+      cFlat(g, w, (x, y) => { const d = (x + .5 - ex) ** 2 + (y + .5 - ey2) ** 2; return d < 1.6 ? "w" : d < 4.4 ? "q" : "p"; }); });
     cLayer(g, cEll(cMask(), cx, cy, rx, ry));
-    const ty = Math.round(cy - ry); cPut(g, Math.round(cx) - 5, ty - 5, ["#........#", ".#......#.", "..#....#..", "...#..#...", "....##...."].map(r => r.replace(/\.##\./, ".##.")));
-    for (let y = Math.round(cy - ry * .25); y < Math.round(cy - ry * .25) + 2; y++) for (let x = 0; x < 24; x++) if (g[y][x] === "l" && (x + y) % 2) g[y][x] = "w";
-    faceX(g, {eye: "dot", gap: .5, ey: .2, mouth: "smile", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier);
+    const ty = cy - ry; [-1, 1].forEach(sd => { cInk(g, cLine(cMask(), cx + sd * 1, ty + .4, cx + sd * 4.2, ty - 3.6, .55)); cFlat(g, cEll(cMask(), cx + sd * 4.4, ty - 3.8, .9, .9), () => "p"); });
+    faceX(g, {eye: "dot", gap: .48, ey: .2, mouth: "small", mgap: 1, cheeks: true}, cx, cy - ry, rx, 2 * ry, tier);
   }
-  if (stage === "adult" && tier === 1) cPut(g, 1, 1, [".#.", "###", ".#."]);
+  if (stage === "adult" && tier === 1) starAt(g, 2.6, 2.6, 2.2);
   return g;
+}
+function eggGrid(genes){
+  const key = "egg" + JSON.stringify(genes || {}); if (CG.has(key)) return CG.get(key);
+  const g = newG(), m = cEll(cMask(), 12, 13.6, 7.6, 9.6); cEll(m, 12, 16.4, 8.2, 6.6); cLayer(g, m, {shade: .3});
+  [[8.6, 9.6, 1.9, 1.5], [15.2, 14.6, 2.4, 1.9], [9.4, 18.4, 1.4, 1.1], [14.4, 7.4, 1, .9]].forEach(([x, y, a, b]) => cEll(cMask(), x, y, a, b).forEach(k => { const [X, Y] = kxy(k); if ("lsw".includes(g[Y][X])) g[Y][X] = "p"; }));
+  const rows = g.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows;
 }
 function creatureGrid(genes, stage, tier = 2){
   const key = JSON.stringify([genes, stage, tier]); if (CG.has(key)) return CG.get(key);
   const G = {...genes}, f = {baby: .64, child: .8, teen: .9, adult: 1}[stage] || 1;
-  if (G.kind === "rare"){ if (stage === "adult" && tier === 5) G.eyes = "sleepy"; const rows = rareGrid(G, stage, tier, f).map(r => r.join("")); CG.set(key, rows); return rows; }
+  const done = gg => { const rows = gg.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows; };
+  if (G.kind === "rare") return done(rareGrid(G, stage, tier, f));
   if ((G.kind === "plant" || G.kind === "gem" || G.kind === "animal") && G.pbody){
-    if (stage === "adult" && tier === 5){ G.eyes = "sleepy"; G.mouth = "tooth"; }
     if (stage === "baby") G.arms = "none";
-    const gg = (G.kind === "plant" ? plantGrid : G.kind === "animal" ? animalGrid : gemGrid)(G, stage, tier, f), rows = gg.map(r => r.join("")); CG.set(key, rows); return rows; }
+    return done((G.kind === "plant" ? plantGrid : G.kind === "animal" ? animalGrid : gemGrid)(G, stage, tier, f)); }
   if (stage === "baby"){ G.top = "curl"; G.arms = "none"; G.feet = G.feet === "none" ? "none" : "tiny"; }
   if (stage === "adult" && tier === 4) G.top = "fringe";
   if (stage === "adult" && tier === 5){ G.eyes = "sleepy"; G.mouth = "tooth"; }
@@ -3028,61 +3046,43 @@ function creatureGrid(genes, stage, tier = 2){
   const fh = ({none: 0, bunny: 8, bear: 2, cat: 3, antenna: 4, sprout: 7, flower: 9, curl: 3, horns: 3, fringe: 2})[G.top] * (G.top === "sprout" || G.top === "flower" ? 1 : f);
   const bottom = G.feet === "none" ? 23 : G.feet === "long" ? 20.2 : 21.2;
   let cy = bottom - ry; if (cy - ry < fh){ ry = Math.max(4.5, (bottom - fh) / 2); cy = bottom - ry; }
-  const top = cy - ry, g = Array.from({length: 24}, () => Array(24).fill("."));
-  const back = [], fore = [];
-  // head features behind the body
+  const top = cy - ry, g = newG();
+  const back = [];
   if (G.top === "bunny"){ const er = 5.2 * f; back.push(cEll(cMask(), 12 - 3.6 * f - .4, top - er * .55, 2.3 * f + .3, er), cEll(cMask(), 12 + 3.6 * f + .4, top - er * .55, 2.3 * f + .3, er)); }
   if (G.top === "bear") back.push(cEll(cMask(), 12 - rx * .62, top + 1.6, 2.8 * f + .2, 2.8 * f + .2), cEll(cMask(), 12 + rx * .62, top + 1.6, 2.8 * f + .2, 2.8 * f + .2));
   if (G.top === "cat") back.push(cTri(cMask(), 12 - rx * .55, top - 2.6 * f, 5 * f, .75), cTri(cMask(), 12 + rx * .55, top - 2.6 * f, 5 * f, .75));
   if (G.top === "horns") back.push(cTri(cMask(), 12 - rx * .42, top - 2.6 * f, 4 * f, .45), cTri(cMask(), 12 + rx * .42, top - 2.6 * f, 4 * f, .45));
-  // feet
-  if (G.feet === "stubby") back.push(cEll(cMask(), 12 - 4 * f, bottom + .9, 2.8 * f + .2, 2.1));
-  if (G.feet === "stubby") back.push(cEll(cMask(), 12 + 4 * f, bottom + .9, 2.8 * f + .2, 2.1));
-  if (G.feet === "tiny") back.push(cEll(cMask(), 12 - 3 * f, bottom + .7, 1.9 * f + .3, 1.6), cEll(cMask(), 12 + 3 * f, bottom + .7, 1.9 * f + .3, 1.6));
-  if (G.feet === "long") back.push(cEll(cMask(), 12 - 3.4 * f, bottom + 1.6, 2 * f + .3, 2.9), cEll(cMask(), 12 + 3.4 * f, bottom + 1.6, 2 * f + .3, 2.9));
   back.forEach(m => cLayer(g, m, {hl: false}));
-  // body
+  feetOn(g, G, f, bottom);
   const B = cMask();
   if (G.shape === "pear"){ cEll(B, 12, cy + ry * .28, rx, ry * .72); cEll(B, 12, cy - ry * .3, rx * .74, ry * .7); }
   else if (G.shape === "drop"){ cEll(B, 12, cy + ry * .12, rx, ry * .88); cEll(B, 12, cy - ry * .62, rx * .42, ry * .4); }
   else cEll(B, 12, cy, rx, ry);
   cLayer(g, B);
-  // inner ear colour
-  if (G.top === "bunny") for (let y = 0; y < 24; y++) for (const x of [Math.round(12 - 3.6 * f - .9), Math.round(12 - 3.6 * f - .4) , Math.round(12 + 3.6 * f), Math.round(12 + 3.6 * f + .5)]) if (y < top + 1 && g[y][x] === "l") g[y][x] = "b";
-  if (G.top === "bear") [12 - rx * .62, 12 + rx * .62].forEach(cx => { const m = cEll(cMask(), cx, top + 1.6, 1.4 * f, 1.4 * f); m.forEach(k => { const x = k % 32, y = k >> 5; if (g[y][x] === "l" || g[y][x] === "s") g[y][x] = "b"; }); });
-  faceOn(g, G, rx, cy, ry);
+  faceX(g, {eye: G.eyes === "happy" ? "happy" : G.eyes === "sleepy" ? "sleepy" : "big", gap: .34, ey: .36, mouth: G.mouth === "cat" ? "cat" : G.mouth === "open" ? "o" : G.mouth === "small" ? "small" : "smile", cheeks: G.cheek !== "none"}, 12, top, rx, 2 * ry, tier);
   armsOn(g, G, cy, ry);
-  // features in front / on top
-  const tY = Math.round(top);
-  if (G.top === "antenna"){ cPut(g, 8, tY - 4, ["#......#", ".#....#.", "..#..#..", "..#..#.."]); }
-  if (G.top === "sprout") cPut(g, 5, tY - 7, [".###......###.", "#sss#....#sss#", "#ssss#..#ssss#", ".#ssss##ssss#.", "..####..####..", "......##......", "......##......"]);
-  if (G.top === "flower") cPut(g, 8, tY - 9, ["...###...", "..#bbb#..", ".##bbb##.", "#bb#s#bb#", "#bb#s#bb#", ".##bbb##.", "..#bbb#..", "...###...", "....#...."]);
-  if (G.top === "curl") cPut(g, 11, tY - 3, ["..#", ".#.", "#..", ".#."]);
-  if (G.top === "fringe") cPut(g, 5, tY - 2, ["..#....#....#..", ".#s#..#s#..#s#.", "#sss##sss##sss#"]);
-  if (stage === "adult" && tier === 1){ cPut(g, 1, Math.max(0, tY), [".#.", "###", ".#."]); cPut(g, 20, Math.max(0, tY + 3), ["#"]); }
-  const rows = g.map(r => r.join(""));
-  CG.set(key, rows); return rows;
+  const rows = g.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows;
 }
-/* painter for any grid; genes add colour */
+/* painter for any grid; genes add colour; grids with .k are drawn at 1/k scale */
 function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {}){
-  const width = rows[0].length, out = [];
-  let x0 = 99, x1 = -1, y0 = 99, y1 = -1;
+  const width = rows[0].length, kk = rows.k || 1, sc = 1 / kk;
+  let x0 = 999, x1 = -1, y0 = 999, y1 = -1;
   rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== ".") { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } }));
   const W = x1 - x0 + 1, H = y1 - y0 + 1;
   let spots = [];
   const COL = genes ? colorsOf(genes) : null, crit = !!genes;
-  if (genes && crit && genes.pattern === "spots"){ let s = genes.ps || 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 4; i++){ const side = i % 2 ? 1 : -1; spots.push(i < 2 ? [x0 + W * (.5 + side * (.3 + r() * .1)), y0 + H * (.45 + r() * .2)] : [x0 + W * (.5 + side * (.08 + r() * .2)), y0 + H * (.8 + r() * .08)]); } }
-  const MARKS = {plant: ["spots", "belly"], gem: ["spots", "tips"]}, pat = genes ? ((MARKS[genes.kind] && !MARKS[genes.kind].includes(genes.pattern)) ? "none" : genes.pattern) : "none";
+  if (genes && genes.pattern === "spots"){ let s = genes.ps || 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 4; i++){ const side = i % 2 ? 1 : -1; spots.push(i < 2 ? [x0 + W * (.5 + side * (.3 + r() * .1)), y0 + H * (.45 + r() * .2)] : [x0 + W * (.5 + side * (.08 + r() * .2)), y0 + H * (.8 + r() * .08)]); } }
+  const MARKS = {plant: ["spots", "belly"], gem: ["spots", "tips"], rare: []}, pat = genes ? ((MARKS[genes.kind] && !MARKS[genes.kind].includes(genes.pattern)) ? "none" : genes.pattern) : "none";
   const markAt = (x, y) => { if (!genes || !crit) return false; const u = (x - x0) / W, v = (y - y0) / H;
     switch (pat){
-      case "spots": return spots.some(([sx, sy]) => (x + .5 - sx) ** 2 + (y + .5 - sy) ** 2 <= 1.3);
+      case "spots": return spots.some(([sx, sy]) => (x + .5 - sx) ** 2 + (y + .5 - sy) ** 2 <= 1.3 * kk * kk);
       case "belly": return ((u - .5) / .26) ** 2 + ((v - .74) / .2) ** 2 <= 1;
-      case "stripes": return v < .34 && v > .06 && (x - x0) % 3 === 1;
+      case "stripes": return v < .34 && v > .06 && Math.floor((x - x0) / kk) % 3 === 1;
       case "patch": return ((u - .3) / .17) ** 2 + ((v - .48) / .16) ** 2 <= 1;
       case "socks": return v > .86;
       case "tips": return v < .26;
     } return false; };
-  const fills = {}, push = (fill, x, y, extra = "") => { (fills[fill + extra] = fills[fill + extra] || []).push([x, y]); };
+  const fills = {}, push = (fill, x, y) => { (fills[fill] = fills[fill] || []).push([x, y]); };
   rows.forEach((row, y) => { for (let x = 0; x < width; x++){ let c = row[x]; if (c === ".") continue;
     if (sleep && c === "w") c = "l";
     if (c === "e" && sleep){ if ((rows[y + 1] || "")[x] === "e"){ c = "l"; } else { push("ink", x, y); const one = row[x - 1] !== "e" && row[x + 1] !== "e" && row[x - 1] !== "w" && row[x + 1] !== "w"; if (one) push("ink", x + (x < width / 2 ? 1 : -1), y); continue; } }
@@ -3098,11 +3098,11 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
     else if (c === "x") push("#5f9e55", x, y);
     else if (c === "y") push("#ffd45e", x, y);
     else if (c === "b") push(CHEEK_C[genes.cheek] || "#f0889a", x, y);
-    else if (c === "l" || c === "s"){ const base = crit && pat === "belly" && markAt(x, y) ? mixC(COL.c, "#ffffff", .55) : markAt(x, y) ? COL.pc : COL.c; push(c === "s" ? shadeC(base) : base, x, y); }
+    else if (c === "l" || c === "s"){ const base = pat === "belly" && markAt(x, y) ? mixC(COL.c, "#ffffff", .55) : markAt(x, y) ? COL.pc : COL.c; push(c === "s" ? shadeC(base) : base, x, y); }
   } });
-  const X = x => ox + (flip ? width - 1 - x : x);
+  const X = x => ox + (flip ? width - 1 - x : x) * sc, Y = y => oy + y * sc;
   return Object.entries(fills).map(([f, pts]) => {
-    const d = pts.map(([x, y]) => `M${X(x)} ${oy + y}h1v1h-1z`).join("");
+    const d = pts.map(([x, y]) => `M${+X(x).toFixed(3)} ${+Y(y).toFixed(3)}h${sc}v${sc}h-${sc}z`).join("");
     if (f === "ink") return `<path d="${d}"/>`;
     if (f === "l") return `<path d="${d}" fill-opacity=".07"/>`;
     if (f === "s") return `<path d="${d}" fill-opacity=".24"/>`;
@@ -3114,12 +3114,12 @@ function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {
 const P_TIER = {pip: 2, tuft: 2, sprout: 2, lump: 4, bloom: 1, fern: 2, pebble: 3, mossy: 4, grub: 5};
 function petGrid(P){
   if (P.dead) return SPR.grave.split("\n");
-  if (P.stage === "egg") return SPR.egg.split("\n");
+  if (P.stage === "egg") return P.genes ? eggGrid(P.genes) : SPR.egg.split("\n");
   if (!P.genes) return SPR[P.form].split("\n");
   return creatureGrid(P.genes, P.stage, P_TIER[P.form] || 2);
 }
 function petMini(P, cls = "petmini"){
-  const g = petGrid(P), w = g[0].length, h = g.length;
+  const g = petGrid(P), k = g.k || 1, w = g[0].length / k, h = g.length / k;
   return `<svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" class="${cls}" aria-hidden="true">${paintGrid(g, 0, 0, {sleep: !!P.asleep, genes: P.dead ? null : P.genes})}</svg>`;
 }
 /* book: stored, partners, passed */
