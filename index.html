@@ -385,6 +385,7 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .scanbox{position:relative;width:72vw;max-width:340px;height:28vw;max-height:140px;border:3px solid #fff;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
 .scanov [data-x]{position:absolute;bottom:calc(30px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%)}
 .scantip{position:absolute;top:calc(30px + env(safe-area-inset-top));left:0;right:0;text-align:center;color:#fff;font-size:14px}
+.warnt{color:var(--warn);font-weight:600}
 </style>
 </head>
 <body>
@@ -1273,10 +1274,15 @@ function viewFood(){
 }
 
 /* ---------- food database search (Open Food Facts + USDA FoodData Central) ---------- */
-const FDC_NUT = {kcal: ["208", "957", "958"], p: ["203"], c: ["205"], f: ["204"]};
+const FDC_NUT = {kcal: ["208", "958", "957"], p: ["203"], c: ["205"], f: ["204"]};
 const rnd1 = v => v == null || isNaN(v) ? "" : Math.round(v * 10) / 10;
 async function searchOFF(q){
-  const u = "https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&json=1&page_size=15&fields=code,product_name,brands,serving_size,serving_quantity,nutriments&search_terms=" + encodeURIComponent(q);
+  const base = "https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&json=1&page_size=15&fields=code,product_name,brands,serving_size,serving_quantity,nutriments&search_terms=" + encodeURIComponent(q);
+  const us = await searchOFFUrl(base + "&tagtype_0=countries&tag_contains_0=contains&tag_0=united-states").catch(() => []);
+  if (us.length >= 3) return us;
+  return us.concat((await searchOFFUrl(base)).filter(x => !us.some(y => y.name === x.name))).slice(0, 15);
+}
+async function searchOFFUrl(u){
   let r; try { r = await fetch(u); } catch { await new Promise(z => setTimeout(z, 600)); r = await fetch(u); }
   if (!r.ok) throw new Error("off " + r.status);
   const j = await r.json();
@@ -1287,21 +1293,22 @@ function offToFood(p){
   const sq = +p.serving_quantity, hasServ = n["energy-kcal_serving"] != null || (sq > 0 && n["energy-kcal_100g"] != null);
   const per = k => hasServ ? (n[k + "_serving"] != null ? +n[k + "_serving"] : (n[k + "_100g"] != null ? +n[k + "_100g"] * sq / 100 : null)) : (n[k + "_100g"] != null ? +n[k + "_100g"] : null);
   const kcal = per("energy-kcal"); if (kcal == null) return null;
-  return {src: "Open Food Facts", name: name + (p.brands ? " · " + p.brands.split(",")[0].trim() : ""), serving: hasServ ? (p.serving_size || sq + " g") : "100 g",
+  return {src: "Open Food Facts", srcNote: "user-added, check the label", name: name + (p.brands ? " · " + p.brands.split(",")[0].trim() : ""), serving: hasServ ? (p.serving_size || sq + " g") : "100 g",
     kcal: rnd1(kcal), p: rnd1(per("proteins")), c: rnd1(per("carbohydrates")), f: rnd1(per("fat"))};
 }
 async function searchFDC(q){
   const key = (items.settings || {}).fdcKey || "DEMO_KEY";
-  const u = "https://api.nal.usda.gov/fdc/v1/foods/search?pageSize=15&dataType=Foundation,SR%20Legacy,Survey%20(FNDDS)&api_key=" + encodeURIComponent(key) + "&query=" + encodeURIComponent(q);
+  const u = "https://api.nal.usda.gov/fdc/v1/foods/search?pageSize=15&dataType=Foundation,SR%20Legacy&api_key=" + encodeURIComponent(key) + "&query=" + encodeURIComponent(q);
   const r = await fetch(u); if (r.status === 429) throw new Error("fdc-limit"); if (!r.ok) throw new Error("fdc " + r.status);
   const j = await r.json();
   return (j.foods || []).map(f => {
-    const get = ids => { const x = (f.foodNutrients || []).find(n => ids.includes(String(n.nutrientNumber))); return x ? +x.value : null; };
+    // priority order: plain Energy (208), then Atwater specific (958), then Atwater general (957)
+    const get = ids => { for (const id of ids){ const x = (f.foodNutrients || []).find(n => String(n.nutrientNumber) === id && /kcal|g/i.test(n.unitName || "")); if (x) return Math.max(0, +x.value); } return null; };
     let kcal = get(FDC_NUT.kcal); if (kcal == null) return null;
     let p = get(FDC_NUT.p), c = get(FDC_NUT.c), ft = get(FDC_NUT.f), serving = "100 g";
     if (f.dataType === "Branded" && f.servingSize && /^g|ml$/i.test(f.servingSizeUnit || "")){ const k = f.servingSize / 100; kcal *= k; p = p == null ? null : p * k; c = c == null ? null : c * k; ft = ft == null ? null : ft * k; serving = Math.round(f.servingSize) + " " + (f.servingSizeUnit || "g").toLowerCase(); }
     const title = (f.description || "").toLowerCase().replace(/(^|[\s,(])\S/g, s => s.toUpperCase());
-    return {src: "USDA", name: title + (f.brandName || f.brandOwner ? " · " + (f.brandName || f.brandOwner) : ""), serving, kcal: rnd1(kcal), p: rnd1(p), c: rnd1(c), f: rnd1(ft)};
+    return {src: "USDA", srcNote: "lab-measured", name: title + (f.brandName || f.brandOwner ? " · " + (f.brandName || f.brandOwner) : ""), serving, kcal: rnd1(kcal), p: rnd1(p), c: rnd1(c), f: rnd1(ft)};
   }).filter(Boolean);
 }
 async function lookupBarcode(code){
@@ -1315,14 +1322,15 @@ async function foodSearch(q){
   // generic USDA foods first, then branded, keep it short
   return {list: out.slice(0, 30), errs};
 }
+function addsUp(x){ const k = +x.kcal, m = 4 * (+x.p || 0) + 4 * (+x.c || 0) + 9 * (+x.f || 0); if (!k || !m) return true; return Math.abs(m - k) <= Math.max(25, k * 0.25); }
 function wireFoodSearch(S){
   const box = S.querySelector("#fs-q"), btn = S.querySelector("[data-fs-go]"), out = S.querySelector("#fs-out"), scan = S.querySelector("[data-fs-scan]");
   if (!box) return;
   let found = [];
   const fill = x => { S.querySelector("[name=name]").value = x.name; ["kcal","p","c","f"].forEach(k => S.querySelector(`[name=${k}]`).value = x[k] === "" ? "" : x[k]);
-    const sv = S.querySelector("#fs-serv"); if (sv) sv.textContent = "Per serving: " + x.serving + " · from " + x.src; out.innerHTML = ""; S.querySelector("[name=qty]").focus(); };
+    const sv = S.querySelector("#fs-serv"); if (sv) sv.textContent = "Per serving: " + x.serving + " · from " + x.src + " (" + x.srcNote + ")" + (addsUp(x) ? "" : " · these numbers don't add up, check the label"); out.innerHTML = ""; S.querySelector("[name=qty]").focus(); };
   const show = (list, msg) => { found = list;
-    out.innerHTML = msg ? `<div class="sub" style="padding:8px 2px">${esc(msg)}</div>` : list.map((x, i) => `<button type="button" class="fsr" data-fs-pick="${i}"><span class="t">${esc(x.name)}</span><span class="m">${x.kcal} cal · P ${x.p} · C ${x.c} · F ${x.f} · per ${esc(x.serving)} · ${x.src}</span></button>`).join("");
+    out.innerHTML = msg ? `<div class="sub" style="padding:8px 2px">${esc(msg)}</div>` : list.map((x, i) => `<button type="button" class="fsr" data-fs-pick="${i}"><span class="t">${esc(x.name)}</span><span class="m">${x.kcal} cal · P ${x.p} · C ${x.c} · F ${x.f} · per ${esc(x.serving)}</span><span class="m">${x.src} · ${x.srcNote}${addsUp(x) ? "" : ` · <b class="warnt">numbers don't add up</b>`}</span></button>`).join("");
     out.querySelectorAll("[data-fs-pick]").forEach(b => b.onclick = () => fill(found[+b.dataset.fsPick])); };
   const go = async () => {
     const q = box.value.trim(); if (!q) return;
