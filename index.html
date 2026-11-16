@@ -406,6 +406,8 @@ details > summary{list-style:none}details > summary::-webkit-details-marker{disp
 .ring3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.rcol{display:flex;flex-direction:column;align-items:center;gap:5px}
 .rlbl{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}.rlbl i{width:8px;height:8px;border-radius:50%}
 @media (prefers-reduced-motion: reduce){.rfill{animation:none}}
+.newtag{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:14px;display:grid;gap:10px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}.swb{width:30px;height:30px;border-radius:50%;background:var(--sw);border:2px solid transparent;box-shadow:inset 0 0 0 2px var(--lcd)}.swb.on{border-color:var(--ink)}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
 
@@ -781,10 +783,32 @@ function catChips(){
 }
 const tagsFor = cat => tags().filter(t => t.cat === cat || t.cat === "both");
 function tagButtons(cat, sel){ const cc = catColors()[cat]; const ts = tagsFor(cat); return ts.length ? ts.map(t => `<button type="button" class="chip tgb ${sel.includes(t.id)?"on":""}" data-val="${esc(t.id)}" style="--cc:${cc};--on:${onOf(cc)};--c:${tagColor(t)}">${esc(t.name)}</button>`).join("") : `<span class="sub">No ${catName(cat)} tags yet. Add them in Settings.</span>`; }
+function tagOpts(cat, sel){ return `<option value="">Add a tag…</option>${tagsFor(cat).filter(t => !sel.includes(t.id)).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("")}<option value="__new">+ New tag…</option>`; }
 function catPicker(cat, sel){
   const keep = sel.filter(id => { const t = tagById(id); return t && (t.cat === cat || t.cat === "both"); });
   return `<div class="seg" data-seg="cat">${CATS.map(([k,l]) => `<button type="button" data-val="${k}" class="${cat===k?"on":""}" style="--cc:${catColors()[k]};--on:${onOf(catColors()[k])}">${l}</button>`).join("")}</div><input type="hidden" name="cat" value="${cat}">
+    <select class="sel tagadd" data-tagadd aria-label="Add a tag" style="margin-top:10px;width:100%">${tagOpts(cat, keep)}</select>
+    <div class="newtag" hidden><input class="inl" data-nt-name placeholder="Tag name" autocomplete="off" maxlength="24"><div class="swatches">${PAL.map((c, i) => `<button type="button" class="swb ${i === 0 ? "on" : ""}" data-nt-col="${i}" style="--sw:${c}" aria-label="${PALN[i]}"></button>`).join("")}</div>
+      <div class="chips"><button type="button" class="btn sm pri" data-nt-add>Add tag</button><button type="button" class="btn sm" data-nt-x>Cancel</button></div></div>
     <div class="chips tagpick" data-tagpick style="margin-top:10px">${tagButtons(cat, keep)}</div><input type="hidden" name="tags" value="${esc(keep.join(","))}">`;
+}
+function wireTagAdd(f){
+  const sel = f.querySelector("[data-tagadd]"); if (!sel) return;
+  const tp = f.querySelector("[data-tagpick]"), hid = tp.nextElementSibling, box = f.querySelector(".newtag"), cat = () => (f.querySelector("[name=cat]") || {}).value || "life";
+  const cur = () => hid.value.split(",").filter(Boolean);
+  const redraw = ids => { tp.innerHTML = tagButtons(cat(), ids); hid.value = ids.join(","); sel.innerHTML = tagOpts(cat(), ids); };
+  let col = 0;
+  sel.onchange = () => { const v = sel.value; sel.value = "";
+    if (v === "__new"){ box.hidden = false; const ts = tags(); const used = ts.map(t => t.c); col = 0; while (used.includes(col) && col < 7) col++; box.querySelectorAll("[data-nt-col]").forEach(b => b.classList.toggle("on", +b.dataset.ntCol === col)); setTimeout(() => box.querySelector("[data-nt-name]").focus(), 30); return; }
+    if (v) redraw([...cur(), v]); };
+  box.querySelectorAll("[data-nt-col]").forEach(b => b.onclick = () => { col = +b.dataset.ntCol; box.querySelectorAll("[data-nt-col]").forEach(x => x.classList.toggle("on", x === b)); });
+  const add = () => { const inp = box.querySelector("[data-nt-name]"), name = inp.value.trim(); if (!name) return inp.focus();
+    const ex = tags().find(t => t.name.toLowerCase() === name.toLowerCase()); let id;
+    if (ex) id = ex.id; else { id = uid(); saveCfg({tags: [...((items.settings || {}).tags || []), {id, name, c: col, cat: cat()}]}); }
+    inp.value = ""; box.hidden = true; redraw([...cur().filter(x => x !== id), id]); };
+  box.querySelector("[data-nt-add]").onclick = add; box.querySelector("[data-nt-name]").onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); add(); } };
+  box.querySelector("[data-nt-x]").onclick = () => { box.hidden = true; };
+  f.querySelector("[data-seg=cat]") && f.querySelector("[data-seg=cat]").addEventListener("click", () => setTimeout(() => { sel.innerHTML = tagOpts(cat(), cur()); }, 0));
 }
 const extraIds = x => (Array.isArray(x.tags) ? x.tags : []).filter(id => id !== "work" && id !== "life");
 const defCat = () => quickCat === "work" ? "work" : "life";
@@ -2052,10 +2076,11 @@ function viewSettings(){
 
   <h2>Tags</h2>
   <div class="card">
+    <form class="row" data-form="newtag"><input class="inl" id="new-tag" placeholder="New tag…" autocomplete="off"><select class="sel" id="new-tag-col" aria-label="Color" onchange="this.dataset.touched=1">${PAL.map((c, i) => `<option value="${i}">${PALN[i]}</option>`).join("")}</select><select class="sel" id="new-tag-cat" aria-label="Category"><option value="work">Work</option><option value="life" selected>Life</option><option value="both">Both</option></select><button class="btn sm">Add</button></form>
     <div data-reorder="tags">${tags().map((tg, _, A) => `<div class="row col" style="gap:8px" data-oid="${esc(tg.id)}"><div class="rowhead">${A.length > 1 ? GRIP : ""}<span class="tg" style="--cc:${tagCC(tg)};--c:${tagColor(tg)};padding:3px 9px;flex:none">${esc(tg.name)}</span><input class="inl" data-tag-name="${esc(tg.id)}" value="${esc(tg.name)}" aria-label="Tag name"><button type="button" class="ghost" data-tag-del="${esc(tg.id)}" aria-label="Remove">✕</button></div>
       <div class="rowhead"><span class="sub" style="flex:1">Category & color</span><select class="sel" data-tag-cat="${esc(tg.id)}" aria-label="Category">${[["work","Work"],["life","Life"],["both","Both"]].map(([k,l]) => `<option value="${k}" ${tg.cat===k?"selected":""}>${l}</option>`).join("")}</select>
       <select class="sel" data-tag-color="${esc(tg.id)}" aria-label="Tag color">${PAL.map((c, i) => `<option value="${i}" ${i===(tg.c||0)?"selected":""}>${PALN[i]}</option>`).join("")}</select></div></div>`).join("") || `<div class="empty">No tags yet.</div>`}</div>
-    <form class="row" data-form="newtag"><input class="inl" id="new-tag" placeholder="New tag…" autocomplete="off"><select class="sel" id="new-tag-cat" aria-label="Category"><option value="work">Work</option><option value="life" selected>Life</option><option value="both">Both</option></select><button class="btn sm">Add</button></form>
+
   </div>
 
   <h2>Today screen</h2>
@@ -2233,6 +2258,7 @@ function sheet(title, inner, onSave, onDelete, saveLabel = "Save"){
     tp.nextElementSibling.value = [...tp.querySelectorAll("button.on")].map(x => x.dataset.val).join(","); });
   f.querySelectorAll("[data-seg]").forEach(sg => sg.onclick = ev => { const b = ev.target.closest("button[data-val]"); if (!b) return; sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); sg.nextElementSibling.value = b.dataset.val;
     if (sg.dataset.seg === "cat"){ const tp = f.querySelector("[data-tagpick]"); if (tp){ const sel = tp.nextElementSibling.value.split(",").filter(id => { const t = tagById(id); return t && (t.cat === b.dataset.val || t.cat === "both"); }); tp.innerHTML = tagButtons(b.dataset.val, sel); tp.nextElementSibling.value = sel.join(","); } } });
+  wireTagAdd(f);
   f.querySelector("[data-cancel]").onclick = close;
   if (onDelete) f.querySelector("[data-del]").onclick = () => { close(); onDelete(); };
   f.onsubmit = async e => { e.preventDefault(); const r = await onSave(f); if (typeof r === "string"){ const er = f.querySelector(".err"); er.textContent = r; er.hidden = false; return; } close(); };
@@ -2818,20 +2844,23 @@ function mixGenes(A, B, r = Math.random){
 }
 /* procedural body -> grid of chars: # outline, l fill, s shade, w shine, e eye, b cheek */
 const CG = new Map();
-const PK = 3, PN = 24 * PK;
-const kxy = k => [k & 127, k >> 7];
-const newG = () => Array.from({length: PN}, () => Array(PN).fill("."));
+const PN = 258, PK = PN / 24;
+const kxy = k => [k & 511, k >> 9];
+const newG = () => { const g = Array.from({length: PN}, () => Array(PN).fill(".")); g.S = new Float32Array(PN * PN); return g; };
 function cMask(){ return new Set(); }
-function cEach(fn){ for (let y = 0; y < PN; y++) for (let x = 0; x < PN; x++) fn(x, y, (x + .5) / PK, (y + .5) / PK); }
-function cEll(m, cx, cy, rx, ry){ cEach((x, y, X, Y) => { if (((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1) m.add(y * 128 + x); }); return m; }
-function cEllR(m, cx, cy, rx, ry, deg){ const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); cEach((x, y, X, Y) => { const dx = X - cx, dy = Y - cy, u = dx * c + dy * s, v = -dx * s + dy * c; if ((u / rx) ** 2 + (v / ry) ** 2 <= 1) m.add(y * 128 + x); }); return m; }
-function cTri(m, cx, tip, h, slope = .7){ cEach((x, y, X, Y) => { if (Y >= tip && Y < tip + h && Math.abs(X - cx) <= (Y - tip + .3) * slope) m.add(y * 128 + x); }); return m; }
-function cRect(m, x0, y0, x1, y1){ cEach((x, y, X, Y) => { if (X >= x0 && X < x1 && Y >= y0 && Y < y1) m.add(y * 128 + x); }); return m; }
-function cLine(m, x0, y0, x1, y1, w){ const dx = x1 - x0, dy = y1 - y0, L = dx * dx + dy * dy || 1; cEach((x, y, X, Y) => { const t = Math.max(0, Math.min(1, ((X - x0) * dx + (Y - y0) * dy) / L)), px = x0 + t * dx - X, py = y0 + t * dy - Y; if (px * px + py * py <= (w / 2) ** 2) m.add(y * 128 + x); }); return m; }
+function cEach(fn, b){ let x0 = 0, y0 = 0, x1 = PN - 1, y1 = PN - 1;
+  if (b){ x0 = Math.max(0, Math.floor(b[0] * PK) - 1); y0 = Math.max(0, Math.floor(b[1] * PK) - 1); x1 = Math.min(PN - 1, Math.ceil(b[2] * PK) + 1); y1 = Math.min(PN - 1, Math.ceil(b[3] * PK) + 1); }
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) fn(x, y, (x + .5) / PK, (y + .5) / PK); }
+function cEll(m, cx, cy, rx, ry){ cEach((x, y, X, Y) => { if (((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1) m.add(y * 512 + x); }, [cx - rx, cy - ry, cx + rx, cy + ry]); return m; }
+function cEllR(m, cx, cy, rx, ry, deg){ const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); cEach((x, y, X, Y) => { const dx = X - cx, dy = Y - cy, u = dx * c + dy * s, v = -dx * s + dy * c; if ((u / rx) ** 2 + (v / ry) ** 2 <= 1) m.add(y * 512 + x); }, [cx - Math.max(rx, ry), cy - Math.max(rx, ry), cx + Math.max(rx, ry), cy + Math.max(rx, ry)]); return m; }
+function cTri(m, cx, tip, h, slope = .7){ cEach((x, y, X, Y) => { if (Y >= tip && Y < tip + h && Math.abs(X - cx) <= (Y - tip + .3) * slope) m.add(y * 512 + x); }, [cx - (h + .3) * slope, tip, cx + (h + .3) * slope, tip + h]); return m; }
+function cRect(m, x0, y0, x1, y1){ cEach((x, y, X, Y) => { if (X >= x0 && X < x1 && Y >= y0 && Y < y1) m.add(y * 512 + x); }, [x0, y0, x1, y1]); return m; }
+function cLine(m, x0, y0, x1, y1, w){ const dx = x1 - x0, dy = y1 - y0, L = dx * dx + dy * dy || 1; cEach((x, y, X, Y) => { const t = Math.max(0, Math.min(1, ((X - x0) * dx + (Y - y0) * dy) / L)), px = x0 + t * dx - X, py = y0 + t * dy - Y; if (px * px + py * py <= (w / 2) ** 2) m.add(y * 512 + x); }, [Math.min(x0, x1) - w, Math.min(y0, y1) - w, Math.max(x0, x1) + w, Math.max(y0, y1) + w]); return m; }
 function cPoly(m, pts){ cEach((x, y, px, py) => { let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside; }
-  if (inside) m.add(y * 128 + x); }); return m; }
-const isEdge = (m, x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, 1], [1, -1], [-1, -1]].some(([dx, dy]) => !m.has((y + dy) * 128 + x + dx) || x + dx < 0 || x + dx >= PN);
+  if (inside) m.add(y * 512 + x); }, [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))]); return m; }
+const EDGE_T = Math.max(2, Math.round(PK * .3)), EDGE_O = (() => { const o = []; for (let dy = -EDGE_T; dy <= EDGE_T; dy++) for (let dx = -EDGE_T; dx <= EDGE_T; dx++) if ((dx || dy) && dx * dx + dy * dy <= EDGE_T * EDGE_T + .5) o.push([dx, dy]); return o; })();
+const isEdge = (m, x, y) => EDGE_O.some(([dx, dy]) => !m.has((y + dy) * 512 + x + dx) || x + dx < 0 || x + dx >= PN);
 function cLayer(g, m, {hl = true, shade = .35} = {}){
   if (!m.size) return;
   let x0 = 999, x1 = -1, y0 = 999, y1 = -1; m.forEach(k => { const [x, y] = kxy(k); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
@@ -2839,12 +2868,12 @@ function cLayer(g, m, {hl = true, shade = .35} = {}){
   m.forEach(k => { const [x, y] = kxy(k); if (y < 0 || y >= PN) return;
     if (isEdge(m, x, y)){ g[y][x] = "#"; return; }
     const nx = (x + .5 - cx) / rx, ny = (y + .5 - cy) / ry, d = nx * .6 + ny;
-    const shine = hl && ((x + .5 - (cx - rx * .42)) / Math.max(2.2, rx * .17)) ** 2 + ((y + .5 - (cy - ry * .46)) / Math.max(1.7, ry * .13)) ** 2 <= 1;
-    g[y][x] = shine ? "w" : d > Math.max(shade, .55) ? "s" : "l"; });
+    const shine = hl && ((x + .5 - (cx - rx * .42)) / Math.max(2.2, rx * .15)) ** 2 + ((y + .5 - (cy - ry * .46)) / Math.max(1.7, ry * .13)) ** 2 <= 1;
+    const t = Math.max(0, Math.min(1, (d - .05) / .9)); g[y][x] = shine ? "w" : "l"; g.S[y * PN + x] = t * t * (3 - 2 * t); });
 }
 function cFlat(g, m, cls){ m.forEach(k => { const [x, y] = kxy(k); g[y][x] = isEdge(m, x, y) ? "#" : cls((x + .5) / PK - .5, (y + .5) / PK - .5); }); }
 function cPut(g, x, y, rows, onBody = false){ rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch === " " || ch === ".") return;
-  for (let a = 0; a < PK; a++) for (let b = 0; b < PK; b++){ const X = (x + i) * PK + a, Y = (y + j) * PK + b; if (Y < 0 || Y >= PN || X < 0 || X >= PN) continue; if (onBody && !"lsw".includes(g[Y][X])) continue; g[Y][X] = ch; } })); }
+  for (let a = 0; a < Math.ceil(PK); a++) for (let b = 0; b < Math.ceil(PK); b++){ const X = Math.floor((x + i) * PK) + a, Y = Math.floor((y + j) * PK) + b; if (Y < 0 || Y >= PN || X < 0 || X >= PN) continue; if (onBody && !"lsw".includes(g[Y][X])) continue; g[Y][X] = ch; } })); }
 function hiPut(g, X0, Y0, rows, onBody = false){ rows.forEach((r, j) => [...r].forEach((ch, i) => { const X = X0 + i, Y = Y0 + j; if (ch === "." || ch === " " || Y < 0 || Y >= PN || X < 0 || X >= PN) return; if (onBody && !"lhsdwpq".includes(g[Y][X])) return; g[Y][X] = ch; })); }
 function cInk(g, m, ch = "#"){ m.forEach(k => { const [x, y] = kxy(k); g[y][x] = ch; }); }
 const EYES = {round: ["we", "ee", "ee"], sparkle: ["we", "ee", "ew"], dot: ["  ", "ee", "ee"]};
@@ -2858,7 +2887,7 @@ function faceOn(g, G, rx, cy, ry, cx = 12){
   cPut(g, Math.round(cx) - Math.floor(M[0].length / 2), ey + 4, M);
 }
 const EYE_P = {dot: [.95, 1.05], big: [1.3, 1.6], wide: [1.55, 1.35], bar: [.62, 1.5], tiny: [.62, .62], happy: [1.1, .9], sleepy: [1.1, .6], closed: [1.1, .6]};
-function cArc(m, cx, cy, r, w, half){ cEach((x, y, X, Y) => { const d = Math.hypot(X - cx, Y - cy); if (Math.abs(d - r) <= w / 2 && (half === "up" ? Y <= cy + .05 : Y >= cy - .05)) m.add(y * 128 + x); }); return m; }
+function cArc(m, cx, cy, r, w, half){ cEach((x, y, X, Y) => { const d = Math.hypot(X - cx, Y - cy); if (Math.abs(d - r) <= w / 2 && (half === "up" ? Y <= cy + .05 : Y >= cy - .05)) m.add(y * 512 + x); }, [cx - r - w, cy - r - w, cx + r + w, cy + r + w]); return m; }
 function paintM(g, m, ch, onBody){ m.forEach(k => { const [x, y] = kxy(k); if (onBody && !"lhsdwpq".includes(g[y][x])) return; g[y][x] = ch; }); }
 function faceX(g, F, cx, top, rx, h, tier, sleep){
   const kind = sleep ? "closed" : tier === 5 ? "sleepy" : F.eye, [erx, ery] = EYE_P[kind] || EYE_P.dot;
@@ -2930,7 +2959,7 @@ function gemGrid(G, stage, tier, f){
     cLayer(g, m);
   }
   if (v === "ore"){ const r = hashR(G.ps); for (let i = 0; i < 6; i++){ const x = Math.round((12 + (r() - .5) * rx * 1.4) * PK), y = Math.round((cy + (r() - .2) * ry * .9) * PK); paintM(g, cEll(cMask(), x / PK, y / PK, .55, .5), "p", true); } }
-  if (v === "geode"){ const band = top + 3.6 * f; cEach((x, y, X, Y) => { const edge = band + (Math.floor(X) % 3 === 1 ? -.9 : 0); if (inB(g, x, y) && Y < edge) g[y][x] = (x + y) % 5 === 0 ? "w" : (Math.floor(X) + Math.floor(Y)) % 2 ? "p" : "q"; });
+  if (v === "geode"){ const band = top + 3.6 * f; cEach((x, y, X, Y) => { const edge = band + (Math.floor(X) % 3 === 1 ? -.9 : 0); if (inB(g, x, y) && Y < edge) g[y][x] = (Math.floor(X * 1.5) + Math.floor(Y * 1.5)) % 2 ? "p" : "q"; });
     for (let x = 0; x < PN; x++){ const X = (x + .5) / PK, y = Math.round((band + (Math.floor(X) % 3 === 1 ? -.9 : 0)) * PK); if (inB(g, x, y)) g[y][x] = "#"; } }
   if (v === "moss"){ cEach((x, y, X, Y) => { const lim = top + 2.4 * f + (Math.sin(X * 1.3) + 1) * .9 + (Math.floor(X) % 5 === 2 ? 1.4 : 0); if (inB(g, x, y) && Y < lim) g[y][x] = Y > lim - .7 ? "x" : "v"; }); }
   if (body === "cut") faceX(g, {eye: "big", gap: .36, ey: .3, mouth: "grin", cheeks: true}, 11.4, top, rx, 2 * ry, tier, G._sleep);
@@ -2968,7 +2997,8 @@ function plantGrid(G, stage, tier, f){
   if (v === "bloom"){ cInk(g, cLine(cMask(), 12.4, top + .6, 13.4, top - 3.2, .6)); leaf(14.6, top - 1.6, 1.8, 1, 30);
     const fx = 13.6, fy = top - 5.2; [0, 72, 144, 216, 288].forEach(a => { const r = a * Math.PI / 180; cFlat(g, cEll(cMask(), fx + Math.cos(r - Math.PI / 2) * 1.8, fy + Math.sin(r - Math.PI / 2) * 1.8, 1.45, 1.45), (x, y) => (x + .5 > fx + .6 && y + .5 > fy) ? "q" : "p"); });
     cFlat(g, cEll(cMask(), fx, fy, 1.1, 1.1), () => "y"); }
-  if (v === "spiky"){ const r = hashR(G.ps || 3); g.forEach((row, y) => row.forEach((c, x) => { if (c === "#" && y < (cy + ry * .5) * PK && r() < .045){ const ox = x < 12 * PK ? -1 : 1; for (let i = 1; i <= 3; i++){ if (g[y][x + i * ox] !== ".") break; g[y][x + i * ox] = "#"; } } }));
+  if (v === "spiky"){ const pcx = body === "bulb" ? 11.6 : 12, pcy = cy, prx = rx + .1, pry = body === "cactus" ? ry : ry * (body === "pot" ? 1 : 1.05);
+    [200, 228, 255, 285, 312, 340, 165, 15].forEach(a => { const r2 = a * Math.PI / 180, x0 = pcx + Math.cos(r2) * prx, y0 = pcy + Math.sin(r2) * pry; if (y0 > cy + ry * .45) return; cInk(g, cLine(cMask(), x0, y0, x0 + Math.cos(r2) * .9, y0 + Math.sin(r2) * .9, .3)); });
     [0, 120, 240].forEach(a => { const rr = a * Math.PI / 180; cFlat(g, cEll(cMask(), 12.2 + Math.cos(rr - Math.PI / 2) * 1.1, top - .8 + Math.sin(rr - Math.PI / 2) * 1.1, 1, 1), () => "p"); });
     cFlat(g, cEll(cMask(), 12.2, top - .8, .7, .7), () => "y"); }
   if (v === "mushroom"){ const cr = rx + 2.2, m = cEll(cMask(), 12.8, top + 2.4, cr, 4.6 * f + .8), keep = new Set(); m.forEach(k => { const [, y] = kxy(k); if ((y + .5) / PK <= top + 2.6) keep.add(k); });
@@ -3027,8 +3057,8 @@ function animalGrid(G, stage, tier, f){
 function rareGrid(G, stage, tier, f){
   const g = newG(), bottom = 22.4;
   if ((G.rbody || "comet") === "comet"){
-    const rx = 6.8 * f + .5, ry = 6.4 * f + .5, cx = 10, cy = bottom - ry;
-    const tail = cMask(); [[1.1, -.2, 1], [1.7, -.6, .85], [2.3, -1.1, .68], [2.8, -1.7, .5]].forEach(([u, v, k]) => cEll(tail, cx + rx * u, cy + ry * v, rx * .55 * k + .4, ry * .5 * k + .4));
+    const rx = 6.6 * f + .5, ry = 6.2 * f + .5, cx = 9.2, cy = bottom - ry;
+    const tail = cMask(); [[1.05, -.2, .95], [1.55, -.6, .8], [2, -1.05, .62], [2.4, -1.55, .45]].forEach(([u, v, k]) => cEll(tail, cx + rx * u, cy + ry * v, rx * .55 * k + .4, ry * .5 * k + .4));
     cFlat(g, tail, (x, y) => y + .5 > cy - ry * .9 + (x - cx) * -.15 ? "q" : "p");
     [[1.5, -.9], [2.3, -1.5], [1.9, -.1]].forEach(([u, v]) => { const X = cx + rx * u, Y = cy + ry * v; paintM(g, cRect(cMask(), X - .55, Y - .17, X + .55, Y + .17), "w", true); paintM(g, cRect(cMask(), X - .17, Y - .55, X + .17, Y + .55), "w", true); });
     cLayer(g, cEll(cMask(), cx, cy, rx, ry));
@@ -3050,12 +3080,12 @@ function eggGrid(genes){
   const key = "egg" + JSON.stringify(genes || {}); if (CG.has(key)) return CG.get(key);
   const g = newG(), m = cEll(cMask(), 12, 13.6, 7.6, 9.6); cEll(m, 12, 16.4, 8.2, 6.6); cLayer(g, m, {shade: .3});
   [[8.6, 9.6, 1.9, 1.5], [15.2, 14.6, 2.4, 1.9], [9.4, 18.4, 1.4, 1.1], [14.4, 7.4, 1, .9]].forEach(([x, y, a, b]) => cEll(cMask(), x, y, a, b).forEach(k => { const [X, Y] = kxy(k); if ("lsw".includes(g[Y][X])) g[Y][X] = "p"; }));
-  const rows = g.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows;
+  const rows = g.map(r => r.join("")); rows.k = PK; rows.S = g.S; CG.set(key, rows); return rows;
 }
 function creatureGrid(genes, stage, tier = 2, sleep = false){
   const key = JSON.stringify([genes, stage, tier, sleep]); if (CG.has(key)) return CG.get(key);
   const G = {...genes, _sleep: sleep}, f = {baby: .64, child: .8, teen: .9, adult: 1}[stage] || 1;
-  const done = gg => { const rows = gg.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows; };
+  const done = gg => { const rows = gg.map(r => r.join("")); rows.k = PK; rows.S = gg.S; CG.set(key, rows); return rows; };
   if (G.kind === "rare") return done(rareGrid(G, stage, tier, f));
   if ((G.kind === "plant" || G.kind === "gem" || G.kind === "animal") && G.pbody){
     if (stage === "baby") G.arms = "none";
@@ -3083,10 +3113,40 @@ function creatureGrid(genes, stage, tier = 2, sleep = false){
   cLayer(g, B);
   faceX(g, {eye: G.eyes === "happy" ? "happy" : G.eyes === "sleepy" ? "sleepy" : "big", gap: .34, ey: .36, mouth: G.mouth === "cat" ? "cat" : G.mouth === "open" ? "o" : G.mouth === "small" ? "small" : "smile", cheeks: G.cheek !== "none"}, 12, top, rx, 2 * ry, tier, G._sleep);
   armsOn(g, G, cy, ry);
-  const rows = g.map(r => r.join("")); rows.k = PK; CG.set(key, rows); return rows;
+  const rows = g.map(r => r.join("")); rows.k = PK; rows.S = g.S; CG.set(key, rows); return rows;
 }
 /* painter for any grid; genes add colour; grids with .k are drawn at 1/k scale */
+const IMGC = new WeakMap();
+const rgbOf = h => hexRgb(h);
+function paintHi(rows, ox, oy, flip, genes){
+  const kk = rows.k, N = rows.length, gk = JSON.stringify(genes || 0);
+  let cache = IMGC.get(rows); if (!cache){ cache = new Map(); IMGC.set(rows, cache); }
+  let url = cache.get(gk);
+  if (!url){
+    const cv = document.createElement("canvas"); cv.width = N; cv.height = N; const ctx = cv.getContext("2d"), im = ctx.createImageData(N, N), D = im.data;
+    const COL = genes ? colorsOf(genes) : {c: "#e8e2d6", pc: "#9a8f80"}, S = rows.S || new Float32Array(N * N);
+    let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1; rows.forEach((r, y) => { const a = r.search(/[^.]/), b = r.length - 1 - [...r].reverse().join("").search(/[^.]/); if (a >= 0){ x0 = Math.min(x0, a); x1 = Math.max(x1, b); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } });
+    const W = x1 - x0 + 1, H = y1 - y0 + 1, MARKS = {plant: ["spots", "belly"], gem: ["spots", "tips"], rare: []}, pat = genes ? ((MARKS[genes.kind] && !MARKS[genes.kind].includes(genes.pattern)) ? "none" : genes.pattern) : "none";
+    const spots = []; if (pat === "spots"){ let s = genes.ps || 1; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 4; i++){ const sd = i % 2 ? 1 : -1; spots.push(i < 2 ? [x0 + W * (.5 + sd * (.3 + r() * .1)), y0 + H * (.45 + r() * .2)] : [x0 + W * (.5 + sd * (.08 + r() * .2)), y0 + H * (.8 + r() * .08)]); } }
+    const markAt = (x, y) => { const u = (x - x0) / W, v = (y - y0) / H; switch (pat){
+      case "spots": return spots.some(([sx, sy]) => (x - sx) ** 2 + (y - sy) ** 2 <= 1.3 * kk * kk);
+      case "belly": return ((u - .5) / .26) ** 2 + ((v - .74) / .2) ** 2 <= 1;
+      case "stripes": return v < .34 && v > .06 && Math.floor((x - x0) / kk) % 3 === 1;
+      case "patch": return ((u - .3) / .17) ** 2 + ((v - .48) / .16) ** 2 <= 1;
+      case "socks": return v > .86; case "tips": return v < .26; } return false; };
+    const base = rgbOf(COL.c), sh = rgbOf(shadeC(shadeC(COL.c))), pc = rgbOf(COL.pc), pcs = rgbOf(shadeC(COL.pc)), belly = rgbOf(mixC(COL.c, "#ffffff", .55)), light = rgbOf(mixC(COL.c, "#ffffff", .38));
+    const fixed = {"#": [43, 34, 48], e: genes && genes.ec !== "ink" ? rgbOf(genes.ec) : [28, 20, 30], w: [255, 255, 255], p: pc, q: pcs, v: [143, 208, 122], x: [95, 158, 85], y: [255, 212, 94], b: rgbOf(CHEEK_C[(genes || {}).cheek] || "#f0889a"), h: light, d: sh, s: rgbOf(shadeC(COL.c))};
+    for (let y = 0; y < N; y++){ const row = rows[y]; for (let x = 0; x < N; x++){ const c = row[x]; if (c === ".") continue; let col;
+      if (c === "l"){ const m = genes && markAt(x, y), b0 = m ? (pat === "belly" ? belly : pc) : base, b1 = m ? (pat === "belly" ? rgbOf(shadeC(mixC(COL.c, "#ffffff", .55))) : pcs) : sh, t = S[y * N + x] * .85; col = [b0[0] + (b1[0] - b0[0]) * t, b0[1] + (b1[1] - b0[1]) * t, b0[2] + (b1[2] - b0[2]) * t]; }
+      else col = fixed[c] || [43, 34, 48];
+      const i = (y * N + x) * 4; D[i] = col[0]; D[i + 1] = col[1]; D[i + 2] = col[2]; D[i + 3] = 255; } }
+    ctx.putImageData(im, 0, 0); url = cv.toDataURL(); cache.set(gk, url);
+  }
+  const s = N / kk;
+  return `<image href="${url}" x="${flip ? -(ox + s) : ox}" y="${oy}" width="${s}" height="${s}" ${flip ? `transform="scale(-1,1)"` : ""} style="image-rendering:auto"/>`;
+}
 function paintGrid(rows, ox, oy, {flip = false, sleep = false, genes = null} = {}){
+  if ((rows.k || 1) > 4 && typeof document !== "undefined") return paintHi(rows, ox, oy, flip, genes);
   const width = rows[0].length, kk = rows.k || 1, sc = 1 / kk;
   let x0 = 999, x1 = -1, y0 = 999, y1 = -1;
   rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== ".") { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } }));
@@ -3346,7 +3406,7 @@ document.addEventListener("submit", e => {
   if (f.dataset.form === "goalstep"){ const t0 = $("#gs-new").value.trim(); if (!t0) return; const g = items[goalOpen]; if (g) put(goalOpen, {...g, steps: [...(g.steps||[]), {id: uid(), t: t0, done: false}]}); const a = $("#gs-new"); if (a) a.focus(); return; }
   const inp = f.querySelector("input"), title = inp.value.trim(); if (!title) return;
   if (f.dataset.form === "newhab"){ const max = Math.max(0, ...habitsList().map(h => h.order||0)); inp.value = ""; put(uid(), {kind:"habit", title, order:max+1, created:Date.now()}); const a = $("#new-hab"); if (a) a.focus(); return; }
-  if (f.dataset.form === "newtag"){ const ts = tags(), cc = (items.settings||{}).catColors || {}; inp.value = ""; const used = [...ts.map(t => t.c), cc.work ?? 0, cc.life ?? 1]; let c = 0; while (used.includes(c) && c < 7) c++; saveCfg({tags: [...ts, {id: uid(), name: title, c, cat: ($("#new-tag-cat") || {}).value || "life"}]}); const a = $("#new-tag"); if (a) a.focus(); return; }
+  if (f.dataset.form === "newtag"){ const ts = tags(), cc = (items.settings||{}).catColors || {}; inp.value = ""; const used = [...ts.map(t => t.c), cc.work ?? 0, cc.life ?? 1]; let c = 0; while (used.includes(c) && c < 7) c++; const pc = $("#new-tag-col"); if (pc && pc.dataset.touched) c = +pc.value; saveCfg({tags: [...ts, {id: uid(), name: title, c, cat: ($("#new-tag-cat") || {}).value || "life"}]}); const a = $("#new-tag"); if (a) a.focus(); return; }
   if (f.dataset.form === "newmeal"){ const c = cfg(); inp.value = ""; saveCfg({mealsCfg: {...c.meals, list: [...c.meals.list, {id: uid(), name: title}]}}); const a = $("#new-meal"); if (a) a.focus(); return; }
   let due = today();
   if (f.dataset.form === "quick-task") due = quickDue === "today" ? today() : quickDue === "tomorrow" ? addDays(today(),1) : null;
