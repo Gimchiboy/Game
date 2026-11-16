@@ -3625,9 +3625,24 @@ function pxOutline(){ const S = pxState(), col = hexU(S.color); pxSnap(); const 
 function pxShade(){ const S = pxState(), col = hexU(S.color), darkH = shadeC(S.color), dark = hexU(darkH); pxSnap(); const D = S.data.slice(), n = (X, Y) => X < 0 || Y < 0 || X >= S.w || Y >= S.h ? 0 : S.data[Y * S.w + X];
   for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++){ if (S.data[y * S.w + x] !== col) continue; if (n(x + 1, y) !== col || n(x, y + 1) !== col || n(x + 1, y + 1) !== col) D[y * S.w + x] = dark; }
   S.data = D; if (!S.palette.includes(darkH)) S.palette.push(darkH); pxRender(); }
-function pxResize(w, h){ const S = pxState(); w = Math.max(4, Math.min(PX_MAX, w | 0)); h = Math.max(4, Math.min(PX_MAX, h | 0)); const D = new Uint32Array(w * h), ox = Math.floor((w - S.w) / 2), oy = Math.floor((h - S.h) / 2);
-  for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++){ const X = x + ox, Y = y + oy; if (X >= 0 && Y >= 0 && X < w && Y < h) D[Y * w + X] = S.data[y * S.w + x]; }
-  S.w = w; S.h = h; S.data = D; S.hist = []; S.fut = []; S.zoom = 0; S.panX = null; pxRender(); }
+function pxScaleData(S, w, h){ const D = new Uint32Array(w * h);
+  for (let Y = 0; Y < h; Y++) for (let X = 0; X < w; X++){ const x0 = Math.floor(X * S.w / w), x1 = Math.max(x0 + 1, Math.floor((X + 1) * S.w / w)), y0 = Math.floor(Y * S.h / h), y1 = Math.max(y0 + 1, Math.floor((Y + 1) * S.h / h));
+    if (x1 - x0 === 1 && y1 - y0 === 1){ D[Y * w + X] = S.data[y0 * S.w + x0]; continue; }
+    const v = new Map(); let best = 0, bc = 0, cx = Math.floor((x0 + x1 - 1) / 2), cy = Math.floor((y0 + y1 - 1) / 2);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++){ const c = S.data[y * S.w + x], n = (v.get(c) || 0) + 1 + (x === cx && y === cy ? .5 : 0); v.set(c, n); if (n > bc){ bc = n; best = c; } }
+    D[Y * w + X] = best; }
+  return D; }
+function pxResize(w, h, keepAspect){ const S = pxState(); w = Math.max(4, Math.min(PX_MAX, w | 0)); h = Math.max(4, Math.min(PX_MAX, h | 0));
+  if (S.rmode === "canvas"){ const D = new Uint32Array(w * h), ox = Math.floor((w - S.w) / 2), oy = Math.floor((h - S.h) / 2);
+    for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++){ const X = x + ox, Y = y + oy; if (X >= 0 && Y >= 0 && X < w && Y < h) D[Y * w + X] = S.data[y * S.w + x]; }
+    S.data = D; S.w = w; S.h = h; }
+  else {
+    if (keepAspect){ if (S.w >= S.h) h = Math.max(4, Math.min(PX_MAX, Math.round(w * S.h / S.w))); else { h = w; w = Math.max(4, Math.min(PX_MAX, Math.round(h * S.w / S.h))); } }
+    const fresh = S.imp && S._refImg && !S.hist.length && pxConvert(S._refImg, w, S.imp.n, S.imp.bg);
+    if (fresh){ const T = {w: fresh.w, h: fresh.h, data: fresh.data}; S.palette = fresh.palette; S.data = (T.h === h) ? T.data : pxScaleData(T, w, h); }
+    else S.data = pxScaleData(S, w, h);
+    S.w = w; S.h = h; }
+  S.hist = []; S.fut = []; S.zoom = 0; S.panX = null; pxRender(); }
 function pxCanvasPNG(scale = 1){ const S = pxState(); pxSync(S); if (scale === 1) return S._off; const cv = document.createElement("canvas"); cv.width = S.w * scale; cv.height = S.h * scale; const c = cv.getContext("2d"); c.imageSmoothingEnabled = false; c.drawImage(S._off, 0, 0, cv.width, cv.height); return cv; }
 const pxBlob = cv => new Promise(res => cv.toBlob(res, "image/png"));
 function pxThumbURL(S){ const t = 96, k = Math.min(1, t / Math.max(S.w, S.h)), cv = document.createElement("canvas"); cv.width = Math.max(1, Math.round(S.w * k)); cv.height = Math.max(1, Math.round(S.h * k)); const c = cv.getContext("2d"); c.imageSmoothingEnabled = k < 1; pxSync(S); c.drawImage(S._off, 0, 0, cv.width, cv.height); return cv.toDataURL("image/png"); }
@@ -3673,7 +3688,8 @@ function viewPixel(){
   <div class="card"><div class="row"><div class="grow"><div class="t">Trace over an image</div><div class="m">Shown behind your pixels, never saved into them</div></div><label class="btn sm" style="cursor:pointer">${S.ref ? "Change" : "Add"}<input type="file" accept="image/*" id="px-ref" hidden></label></div>
     ${S.ref ? `<label class="row"><div class="grow t">Show it</div><input type="checkbox" class="switch" id="px-refon" ${S.refOn ? "checked" : ""}></label><div class="row"><div class="grow t">See-through</div><input type="range" id="px-refop" min="5" max="100" value="${Math.round(S.refOp * 100)}" style="width:50%"></div>` : ""}</div>
   <h2>Canvas</h2>
-  <div class="card"><div class="row"><div class="grow t">Size</div><select class="sel" id="px-size"><option value="">${S.w}×${S.h}</option>${sizes.map(n => `<option value="${n}">${n}×${n}</option>`).join("")}</select></div>
+  <div class="card"><div class="row"><div class="grow"><div class="t">Changing size</div><div class="m">${S.rmode === "canvas" ? "Adds or trims space around the edges" : "Shrinks or enlarges the whole picture"}</div></div><div class="seg" style="width:auto"><button type="button" data-px="rm-scale" class="${S.rmode === "canvas" ? "" : "on"}">Scale</button><button type="button" data-px="rm-canvas" class="${S.rmode === "canvas" ? "on" : ""}">Trim/pad</button></div></div>
+    <div class="row"><div class="grow t">Size</div><select class="sel" id="px-size"><option value="">${S.w}×${S.h}</option>${sizes.map(n => `<option value="${n}">${S.rmode === "canvas" ? `${n}×${n}` : `${n} ${S.w >= S.h ? "wide" : "tall"}`}</option>`).join("")}</select></div>
     <div class="row"><div class="grow t">Custom</div><input class="num" id="px-cw" inputmode="numeric" value="${S.w}" style="width:64px"><span class="sub">×</span><input class="num" id="px-ch" inputmode="numeric" value="${S.h}" style="width:64px"><button class="btn sm" data-px="custom">Set</button></div>
     <div class="row"><div class="grow"><div class="t">Preview</div><div class="m">Actual size${Math.max(S.w, S.h) > 128 ? ", shown smaller" : ""}</div></div><canvas id="px-prev" style="image-rendering:pixelated;width:${Math.min(128, S.w * Math.min(1, 128 / Math.max(S.w, S.h)))}px;height:${Math.min(128, S.h * Math.min(1, 128 / Math.max(S.w, S.h)))}px;background:repeating-conic-gradient(#e9e6df 0 25%, #f7f5f0 0 50%) 0 0/8px 8px"></canvas></div>
     <div class="row"><div class="grow t">Export PNG</div><button class="btn sm" data-px="png1">1×</button><button class="btn sm" data-px="png8">${S.w > 256 ? "4×" : "8×"}</button></div>
@@ -3687,7 +3703,7 @@ function pxImportFile(file, asRef){ const fr = new FileReader(); fr.onload = () 
       <label class="fld"><span>Colors</span><input name="n" inputmode="numeric" value="14"></label>
       <label class="fld" style="display:flex;align-items:center;gap:12px"><span style="margin:0;flex:1">Remove the background</span><input type="checkbox" class="switch" name="bg" checked></label>`,
       f => { const w = Math.max(8, Math.min(PX_MAX, parseInt(f.w.value) || 64)), n = Math.max(2, Math.min(32, parseInt(f.n.value) || 14)), r = pxConvert(img, w, n, f.bg.checked); if (!r) return "Couldn't read that image.";
-        const S = pxNew(r.w, Math.min(PX_MAX, r.h)); S.data = r.data.slice(0, S.w * S.h); S.palette = r.palette; S.color = r.palette[0]; S.name = file.name.replace(/\.[^.]+$/, ""); S.ref = fr.result; S._refImg = img; S.refOn = false; PX = S; pxView = "edit"; render(); }, null, "Convert");
+        const S = pxNew(r.w, Math.min(PX_MAX, r.h)); S.data = r.data.slice(0, S.w * S.h); S.palette = r.palette; S.color = r.palette[0]; S.name = file.name.replace(/\.[^.]+$/, ""); S.ref = fr.result; S._refImg = img; S.refOn = false; S.imp = {n, bg: f.bg.checked}; PX = S; pxView = "edit"; render(); }, null, "Convert");
   }; img.src = fr.result; }; fr.readAsDataURL(file); }
 function mountPixel(){
   const imp = document.getElementById("px-import"); if (imp) imp.onchange = () => imp.files[0] && pxImportFile(imp.files[0], false);
@@ -3697,7 +3713,7 @@ function mountPixel(){
   const ref = document.getElementById("px-ref"); if (ref) ref.onchange = () => ref.files[0] && pxImportFile(ref.files[0], true);
   const ro = document.getElementById("px-refon"); if (ro) ro.onchange = () => { S.refOn = ro.checked; pxDraw(); };
   const rop = document.getElementById("px-refop"); if (rop) rop.oninput = () => { S.refOp = rop.value / 100; pxDraw(); };
-  const sz = document.getElementById("px-size"); if (sz) sz.onchange = () => sz.value && pxResize(+sz.value, +sz.value);
+  const sz = document.getElementById("px-size"); if (sz) sz.onchange = () => sz.value && pxResize(+sz.value, +sz.value, S.rmode !== "canvas");
   const add = document.getElementById("px-add"); if (add) add.onchange = () => { if (!S.palette.includes(add.value)) S.palette.push(add.value); S.color = add.value; pxRender(); };
   const pal = document.getElementById("px-pal"); if (pal) pal.onchange = () => { if (!pal.value) return; S.palette = [...PX_PALETTES[pal.value]]; S.color = S.palette[0]; pxRender(); };
   const ptrs = new Map(); let start = null, before = null, last = null, pinch = null, raf = 0;
@@ -3743,6 +3759,7 @@ document.addEventListener("click", e => {
   if (a === "zin") return zoomBy(1.4);
   if (a === "zout") return zoomBy(1 / 1.4);
   if (a === "fit"){ S.zoom = 0; S.panX = null; return pxDraw(); }
+  if (a === "rm-scale" || a === "rm-canvas"){ S.rmode = a === "rm-canvas" ? "canvas" : "scale"; return pxRender(); }
   if (a === "custom"){ const w = parseInt((document.getElementById("px-cw") || {}).value), h = parseInt((document.getElementById("px-ch") || {}).value); if (!(w > 0 && h > 0)) return; return pxResize(w, h); }
   if (a === "mirror"){ S.mirror = !S.mirror; return pxRender(); }
   if (a === "grid"){ S.grid = !S.grid; return pxRender(); }
