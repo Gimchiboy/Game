@@ -363,6 +363,8 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .card .ghost{color:var(--muted);font-size:15px}
 .card .ghost:disabled{opacity:.3}
 .row .num + .sub{min-width:44px}
+.hsch{flex:none;max-width:42%;text-align:right;font-size:12px;padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
 .wd.future{opacity:.35;cursor:default}
 
 .fld input.switch{width:44px;height:26px;padding:0;border:1.5px solid var(--shell-ink);background:var(--shell-3);border-radius:999px}
@@ -753,10 +755,15 @@ function rMatch(e, x){
     case "weekdays": { const w = b.getDay(); return w > 0 && w < 6; }
     case "weekly": { const days = r.days && r.days.length ? r.days : [a.getDay()]; if (!days.includes(b.getDay())) return false;
       const wk = Math.round(((dIdx(x) - b.getDay()) - (dIdx(e.date) - a.getDay())) / 7); return wk % iv === 0; }
-    case "monthly": { if (b.getDate() !== a.getDate()) return false; const mo = (b.getFullYear()-a.getFullYear())*12 + b.getMonth() - a.getMonth(); return mo % iv === 0; }
-    case "yearly": return b.getMonth() === a.getMonth() && b.getDate() === a.getDate() && (b.getFullYear() - a.getFullYear()) % iv === 0;
+    case "monthly": { const mo = (b.getFullYear()-a.getFullYear())*12 + b.getMonth() - a.getMonth(); return mo % iv === 0 && dayMatch(r, a, b); }
+    case "yearly": return b.getMonth() === a.getMonth() && (b.getFullYear() - a.getFullYear()) % iv === 0 && dayMatch(r, a, b);
   }
   return false;
+}
+const dim = b => new Date(b.getFullYear(), b.getMonth() + 1, 0).getDate();
+function dayMatch(r, a, b){
+  if (r.mode === "nth"){ if (b.getDay() !== r.wd) return false; return r.nth === -1 ? b.getDate() + 7 > dim(b) : Math.ceil(b.getDate() / 7) === r.nth; }
+  return b.getDate() === Math.min(a.getDate(), dim(b));
 }
 const countEnd = new Map();
 function lastByCount(e){
@@ -779,14 +786,63 @@ function isStart(e, x){
 const spanOf = e => e.endDate && e.endDate > e.date ? dIdx(e.endDate) - dIdx(e.date) : 0;
 function occursOn(e, d){ const sp = spanOf(e); for (let k = 0; k <= sp; k++){ const s0 = addDays(d, -k); if (isStart(e, s0)) return s0; } return null; }
 function nextOcc(e, from){ let x = from > e.date ? from : e.date; for (let i = 0; i < 800; i++, x = addDays(x, 1)) if (isStart(e, x)) return x; return null; }
-const FREQ = {none:"Never", daily:"Every day", weekdays:"Weekdays (Mon–Fri)", weekly:"Every week", monthly:"Every month", yearly:"Every year"};
-function repeatText(r){
+const FREQ = {none:"Never", daily:"Daily", weekdays:"Every weekday (Mon–Fri)", weekly:"Weekly", monthly:"Monthly", yearly:"Yearly"};
+const DAYF = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const NTH = {1:"first", 2:"second", 3:"third", 4:"fourth", "-1":"last"};
+function repeatText(r, anchor){
   if (!r || !r.freq) return "";
-  const iv = Math.max(1, r.interval || 1), unit = {daily:"day", weekly:"week", monthly:"month", yearly:"year"}[r.freq];
+  const iv = Math.max(1, r.interval || 1), unit = {daily:"day", weekly:"week", monthly:"month", yearly:"year"}[r.freq], a = anchor ? parse(anchor) : null;
   let t = r.freq === "weekdays" ? "Weekdays" : iv > 1 ? `Every ${iv} ${unit}s` : {daily:"Daily", weekly:"Weekly", monthly:"Monthly", yearly:"Yearly"}[r.freq];
-  if (r.freq === "weekly" && r.days && r.days.length) t += " on " + r.days.slice().sort().map(d => DOW[d]).join(", ");
+  if (r.freq === "weekly" && r.days && r.days.length){ const ds = r.days.slice().sort(); t += " on " + (ds.join() === "0,6" ? "weekends" : ds.join() === "1,2,3,4,5" ? "weekdays" : ds.length === 7 ? "every day" : ds.map(d => DOW[d].slice(0, 3)).join(", ")); }
+  if (r.freq === "monthly") t += r.mode === "nth" ? ` on the ${NTH[r.nth]} ${DAYF[r.wd]}` : a ? ` on day ${a.getDate()}` : "";
+  if (r.freq === "yearly" && a) t += r.mode === "nth" ? ` on the ${NTH[r.nth]} ${DAYF[r.wd]} of ${MON[a.getMonth()]}` : ` on ${MON[a.getMonth()]} ${a.getDate()}`;
   if (r.until) t += ` until ${fmtDay(r.until)}`; else if (r.count) t += `, ${r.count} times`;
   return t;
+}
+function recurFields(r, anchor, {none = true} = {}){
+  r = r || {}; const freq = r.freq || (none ? "none" : "daily"), ends = r.until ? "on" : r.count ? "after" : "never";
+  const days = r.days && r.days.length ? r.days : [parse(anchor || today()).getDay()];
+  return `<div class="rp">
+    <div class="two"><label class="fld"><span>Repeat</span><select name="freq">${Object.entries(FREQ).filter(([k]) => none || k !== "none").map(([k,l]) => `<option value="${k}" ${k===freq?"selected":""}>${l}</option>`).join("")}</select></label>
+      <label class="fld rp-iv"><span>Every</span><div class="ivrow"><input type="number" name="interval" min="1" max="99" value="${r.interval||1}" inputmode="numeric"><span class="sub rp-unit"></span></div></label></div>
+    <div class="fld rp-days"><span>On</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${days.includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${days.join(",")}"></div>
+    <label class="fld rp-mode"><span>On</span><select name="rmode" data-cur="${r.mode === "nth" ? (r.nth === -1 ? "last" : "nth") : "day"}"></select></label>
+    <div class="two rp-end"><label class="fld"><span>Ends</span><select name="ends"><option value="never" ${ends==="never"?"selected":""}>Never</option><option value="on" ${ends==="on"?"selected":""}>On a date</option><option value="after" ${ends==="after"?"selected":""}>After a number of times</option></select></label>
+      <label class="fld rp-until"><span>End date</span><input type="date" name="until" value="${esc(r.until||"")}"></label>
+      <label class="fld rp-count"><span>Times</span><input type="number" name="count" min="1" max="999" value="${r.count||10}" inputmode="numeric"></label></div>
+    <div class="sub rp-sum" style="margin:-4px 0 12px"></div></div>`;
+}
+function wireRecur(S, anchorName){
+  const q = n => S.querySelector(`[name=${n}]`), A = () => (q(anchorName) && q(anchorName).value) || today();
+  const sync = () => {
+    const fq = q("freq").value, en = q("ends").value, a = parse(A()), dm = dim(a), nth = Math.ceil(a.getDate() / 7), isLast = a.getDate() + 7 > dm;
+    S.querySelector(".rp-iv").style.display = fq === "none" || fq === "weekdays" ? "none" : "";
+    S.querySelector(".rp-unit").textContent = ({daily:"days", weekly:"weeks", monthly:"months", yearly:"years"})[fq] || "";
+    S.querySelector(".rp-days").style.display = fq === "weekly" ? "" : "none";
+    S.querySelector(".rp-mode").style.display = fq === "monthly" || fq === "yearly" ? "" : "none";
+    S.querySelector(".rp-end").style.display = fq === "none" ? "none" : "";
+    S.querySelector(".rp-until").style.display = en === "on" ? "" : "none";
+    S.querySelector(".rp-count").style.display = en === "after" ? "" : "none";
+    const sel = q("rmode"), cur = sel.value || sel.dataset.cur || "day", of = fq === "yearly" ? ` of ${MON[a.getMonth()]}` : "";
+    const opts = [["day", fq === "yearly" ? `${MON[a.getMonth()]} ${a.getDate()}` : `Day ${a.getDate()}${a.getDate() > 28 ? " (or the last day)" : ""}`]];
+    if (nth <= 4) opts.push(["nth", `The ${NTH[nth]} ${DAYF[a.getDay()]}${of}`]);
+    if (isLast) opts.push(["last", `The last ${DAYF[a.getDay()]}${of}`]);
+    sel.innerHTML = opts.map(([k, l]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(l)}</option>`).join("");
+    const rr = readRecur(S, A()); S.querySelector(".rp-sum").textContent = rr && typeof rr === "object" ? repeatText(rr, A()) : "";
+  };
+  S.querySelectorAll("[name=freq],[name=ends],[name=rmode],[name=interval],[name=count],[name=until]").forEach(x => { x.addEventListener("change", sync); x.addEventListener("input", sync); });
+  if (q(anchorName)) q(anchorName).addEventListener("change", sync);
+  S.querySelector(".rp-days [data-daypick]").addEventListener("click", () => setTimeout(sync, 0));
+  sync(); return sync;
+}
+function readRecur(f, anchor){
+  const q = n => f.querySelector(`[name=${n}]`), fq = q("freq").value; if (fq === "none") return null;
+  const a = parse(anchor), rep = {freq: fq, interval: fq === "weekdays" ? 1 : Math.max(1, Math.min(99, parseInt(q("interval").value) || 1))};
+  if (fq === "weekly"){ rep.days = q("days").value.split(",").filter(x => x !== "").map(Number); if (!rep.days.length) rep.days = [a.getDay()]; }
+  if (fq === "monthly" || fq === "yearly"){ const m = q("rmode").value; if (m === "nth" || m === "last"){ rep.mode = "nth"; rep.nth = m === "last" ? -1 : Math.ceil(a.getDate() / 7); rep.wd = a.getDay(); } }
+  if (q("ends").value === "on"){ if (!q("until").value) return "Pick when the repeat ends."; if (q("until").value < anchor) return "Repeat end is before the start."; rep.until = q("until").value; }
+  if (q("ends").value === "after") rep.count = Math.max(1, parseInt(q("count").value) || 1);
+  return rep;
 }
 const SHOW = {busy:"Busy", free:"Free", tentative:"Tentative", away:"Away"};
 const REMIND = [["","None"],["0","At start time"],["5","5 minutes before"],["10","10 minutes before"],["15","15 minutes before"],["30","30 minutes before"],["60","1 hour before"],["120","2 hours before"],["1440","1 day before"]];
@@ -839,6 +895,17 @@ function dragEnd(){
 document.addEventListener("pointerup", e => { if (drag && e.pointerId === drag.pid) dragEnd(); });
 document.addEventListener("pointercancel", e => { if (drag && e.pointerId === drag.pid) dragEnd(); });
 document.addEventListener("click", e => { if (e.target.closest("[data-grip]")){ e.stopPropagation(); e.preventDefault(); } }, true);
+const habRule = h => ({date: h.start || LEGACY_START, repeat: h.rep, ex: []});
+const habitsOn = d => habitsList().filter(h => !h.rep || !h.rep.freq || isStart(habRule(h), d));
+function habitSheet(id){
+  const h = items[id]; if (!h) return; const start = h.start || today();
+  sheet("Schedule", `<div class="sub" style="margin-bottom:12px">${esc(h.title)}</div>
+    <label class="fld"><span>Starts</span><input type="date" name="start" value="${esc(start)}"></label>
+    ${recurFields(h.rep || {freq: "daily"}, start, {none: false})}`,
+    f => { const st = f.start.value || today(), rep = readRecur(f, st); if (typeof rep === "string") return rep;
+      put(id, {...items[id], start: st, rep: rep.freq === "daily" && rep.interval === 1 && !rep.until && !rep.count ? null : rep}); });
+  wireRecur($(".sheet"), "start");
+}
 function habitsList(){ return all("habit").filter(h => !h.archived).sort((a,b) => (a.order||0)-(b.order||0)); }
 function dayDoc(d){ return items["day-" + d] || {kind:"day", date:d, done:{}, reflect:""}; }
 const UNITS = {glasses:{ml:240, n:"glasses", step:1}, cups:{ml:240, n:"cups", step:1}, oz:{ml:29.5735, n:"oz", step:8}, ml:{ml:1, n:"ml", step:250}, bottles:{ml:500, n:"bottles", step:1}};
@@ -869,7 +936,7 @@ function bodyChecks(d){
   if (c.sleep.on) out.push(["Sleep", sleepHours(dd) != null]);
   return out;
 }
-function dayScore(d){ const hs = habitsList(), dd = dayDoc(d).done || {}; const b = bodyChecks(d); return {n: hs.filter(h => dd[h.id]).length + b.filter(x => x[1]).length, total: hs.length + b.length}; }
+function dayScore(d){ const hs = habitsOn(d), dd = dayDoc(d).done || {}; const b = bodyChecks(d); return {n: hs.filter(h => dd[h.id]).length + b.filter(x => x[1]).length, total: hs.length + b.length}; }
 function dayFrac(d){ const s = dayScore(d); return s.total ? s.n / s.total : 0; }
 function sleepHours(dd){
   const s = dd.sleep; if (!s || !s.bed || !s.wake) return null;
@@ -923,6 +990,7 @@ function taskRow(t, dr){
   const late = !t.done && t.due && t.due < today();
   const meta = [catTag(t)];
   if (t.due) meta.push(`<span class="tag ${late?"warn":""}">${esc(relDay(t.due))}${t.time?" · "+fmtTime(t.time):""}</span>`);
+  if (t.repeat && t.repeat.freq && !t.done) meta.push("↻ " + esc(repeatText(t.repeat, t.rstart || t.due)) + (t.repeat.regen ? " after done" : ""));
   if (t.notes) meta.push(esc(t.notes.split("\n")[0].slice(0,60)));
   return `<div class="row ${t.done?"done":""}" ${dr ? `data-oid="${t.id}"` : ""}>${dr ? GRIP : ""}
     <span class="bar-l" style="--c:${firstColor(t)}"></span><input type="checkbox" class="chk" data-toggle-task="${t.id}" ${t.done?"checked":""} aria-label="Done">
@@ -937,7 +1005,7 @@ function eventRow(e){
   if (multi) meta.push(`Day ${e.dayN + 1} of ${e.span + 1}`);
   else if (!allDay && e.end) meta.push(`until ${fmtTime(e.end)}`);
   if (e.location) meta.push("📍 " + esc(e.location));
-  if (e.repeat && e.repeat.freq) meta.push("↻ " + esc(repeatText(e.repeat)));
+  if (e.repeat && e.repeat.freq) meta.push("↻ " + esc(repeatText(e.repeat, e.date)));
   if (e.remind != null && e.remind !== "") meta.push("🔔");
   if (e.show && e.show !== "busy") meta.push(SHOW[e.show]);
   return `<div class="row tap ev-${e.show||"busy"}" data-edit-event="${e.id}" data-occ="${e.occ || e.date}"><span class="bar-l" style="--c:${firstColor(e)}"></span>
@@ -947,7 +1015,7 @@ function eventRow(e){
 }
 
 function viewToday(){
-  const t = today(), c = cfg(), hs = habitsList(), dd = dayDoc(viewDay), done = dd.done || {};
+  const t = today(), c = cfg(), hs = habitsOn(viewDay), dd = dayDoc(viewDay), done = dd.done || {};
   const sc = dayScore(viewDay), n = sc.n, meals = dd.meals || {}, sh = sleepHours(dd);
   const sun = addDays(t, -parse(t).getDay()), week = []; for (let i = 0; i < 7; i++) week.push(addDays(sun, i));
   const hr = new Date().getHours();
@@ -1515,7 +1583,9 @@ function wireScaler(S, x){
 }
 /* ---------- repeat (planned) foods ---------- */
 const repeats = () => all("foodRepeat").sort((a, b) => { const o = id => { const i = foodMeals().findIndex(m => m.id === id); return i < 0 ? 99 : i; }; return o(a.meal) - o(b.meal) || byOrder((x, y) => (x.created || 0) - (y.created || 0))(a, b); });
-const plannedFor = d => repeats().filter(r => (r.days || []).includes(parse(d).getDay()));
+const LEGACY_START = "2020-01-05";
+const foodRule = r => ({date: r.start || LEGACY_START, repeat: r.rep || {freq: "weekly", interval: 1, days: r.days && r.days.length ? r.days : [0,1,2,3,4,5,6]}, ex: r.ex || []});
+const plannedFor = d => repeats().filter(r => isStart(foodRule(r), d));
 const eatenRepeat = (d, rid) => eatsOf(d).find(e => e.repeatId === rid);
 const mealName = id => (foodMeals().find(m => m.id === id) || {name: "No meal"}).name;
 const dayLetters = days => DOW.map((n, i) => `<span class="dl ${days.includes(i) ? "on" : ""}">${n.slice(0, 1)}</span>`).join("");
@@ -1534,10 +1604,11 @@ function viewRepeats(){
   return `<div style="margin-top:14px"><button class="btn pri" data-act="new-repeat">New repeat</button></div>
   <div class="sub" style="margin-top:10px">Foods you eat on set days. They show on Today as a checklist, and checking one off logs it here.</div>
   ${rs.length ? [...foodMeals(), {id: "", name: "No meal"}].map(m => { const grp = rs.filter(r => m.id ? r.meal === m.id : !hasMeal(r.meal)); if (!grp.length) return "";
-    return `${foodMeals().length ? `<h2>${esc(m.name)}</h2>` : ""}<div class="card" style="margin-top:${foodMeals().length ? 0 : 12}px" data-reorder="repeats">${grp.map(r => `<div class="row tap" data-repeat="${r.id}" data-oid="${r.id}">${grp.length > 1 ? GRIP : ""}<div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round((+r.kcal || 0) * (r.qty || 1))} cal · P ${Math.round((+r.p || 0) * (r.qty || 1))} · C ${Math.round((+r.c || 0) * (r.qty || 1))} · F ${Math.round((+r.f || 0) * (r.qty || 1))}</div><div class="dls">${dayLetters(r.days || [])}</div></div><span class="sub">›</span></div>`).join("")}</div>`; }).join("") : `<div class="card" style="margin-top:12px"><div class="empty">No repeats yet.</div></div>`}`;
+    return `${foodMeals().length ? `<h2>${esc(m.name)}</h2>` : ""}<div class="card" style="margin-top:${foodMeals().length ? 0 : 12}px" data-reorder="repeats">${grp.map(r => `<div class="row tap" data-repeat="${r.id}" data-oid="${r.id}">${grp.length > 1 ? GRIP : ""}<div class="grow"><div class="t">${esc(r.name)}${(+r.qty || 1) !== 1 ? ` <span class="sub">× ${r.qty}</span>` : ""}</div><div class="m">${esc(mealName(r.meal))} · ${Math.round((+r.kcal || 0) * (r.qty || 1))} cal · P ${Math.round((+r.p || 0) * (r.qty || 1))} · C ${Math.round((+r.c || 0) * (r.qty || 1))} · F ${Math.round((+r.f || 0) * (r.qty || 1))}</div><div class="m">↻ ${esc(repeatText(foodRule(r).repeat, r.start || null))}</div></div><span class="sub">›</span></div>`).join("")}</div>`; }).join("") : `<div class="card" style="margin-top:12px"><div class="empty">No repeats yet.</div></div>`}`;
 }
 function repeatSheet(id){
-  const x = id ? items[id] : {name: "", qty: 1, meal: (foodMeals()[0] || {id: ""}).id, kcal: "", p: "", c: "", f: "", days: [1, 2, 3, 4, 5]};
+  const x = id ? items[id] : {name: "", qty: 1, meal: (foodMeals()[0] || {id: ""}).id, kcal: "", p: "", c: "", f: "", rep: {freq: "daily", interval: 1}, start: today()};
+  const rule = foodRule(x), start = x.start || today();
   const recent = myFoods().slice(0, 12);
   sheet(id ? "Edit repeat" : "New repeat", `
     ${id ? "" : `<div class="fld"><span>Search foods</span><div class="quick" style="margin-top:0"><input id="fs-q" placeholder="Search" autocomplete="off" enterkeyhint="search"><button type="button" class="btn" data-fs-go>Search</button>${"BarcodeDetector" in window ? `<button type="button" class="btn" data-fs-scan aria-label="Scan barcode">Scan</button>` : ""}</div><div id="fs-out" class="fsout"></div></div>`}
@@ -1545,15 +1616,15 @@ function repeatSheet(id){
     <label class="fld"><span>Food</span><input name="name" value="${esc(x.name)}" required></label>
     <div class="two"><label class="fld"><span>Servings</span><input name="qty" type="number" min="0.01" step="any" inputmode="decimal" value="${x.qty || 1}"></label>
       <label class="fld"><span>Meal</span>${mealSelect(x.meal)}</label></div>
-    <div class="fld"><span>Days</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${(x.days||[]).includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${(x.days||[]).join(",")}">
-      <div class="chips" style="margin-top:6px"><button type="button" class="link" data-days="0,1,2,3,4,5,6" style="padding:2px 0">Every day</button><button type="button" class="link" data-days="1,2,3,4,5" style="padding:2px 0">Weekdays</button><button type="button" class="link" data-days="0,6" style="padding:2px 0">Weekends</button></div></div>
+    <label class="fld"><span>Starts</span><input type="date" name="start" value="${esc(start)}"></label>
+    ${recurFields(rule.repeat, start, {none: false})}
     ${nutFields(x)}
     ${id ? `<div class="sub">Changes apply from now on. Days you already checked off keep their numbers.</div>` : ""}`,
     f => {
       const name = f.name.value.trim(); if (!name) return "Name the food."; if (f.kcal.value === "") return "Enter calories.";
-      const days = f.days.value.split(",").filter(v => v !== "").map(Number); if (!days.length) return "Pick at least one day.";
+      const st = f.start.value || today(), rep = readRecur(f, st); if (typeof rep === "string") return rep;
       const P = f._sc.per();
-      put(id || uid(), {...(id ? items[id] : {kind: "foodRepeat", created: Date.now()}), name, qty: f._sc.qty, meal: f.meal.value, days, ...P});
+      put(id || uid(), {...(id ? items[id] : {kind: "foodRepeat", created: Date.now()}), name, qty: f._sc.qty, meal: f.meal.value, start: st, rep, days: null, ...P});
       if (!myFoods().some(m => m.name.toLowerCase() === name.toLowerCase())) put(uid(), {kind: "foodItem", name, ...P, last: Date.now()}, {silent: true});
     },
     id ? () => confirmSheet("Delete this repeat?", "It stops showing on Today. Days you already logged keep their entries.", () => del(id)) : null);
@@ -1562,8 +1633,7 @@ function repeatSheet(id){
   S.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const m = items[b.dataset.pick]; if (!m) return;
     S.querySelector("[name=name]").value = m.name; S._sc.set(m);
     S.querySelectorAll("[data-pick]").forEach(y => y.classList.toggle("on", y === b)); });
-  S.querySelectorAll("[data-days]").forEach(b => b.onclick = () => { const ds = b.dataset.days.split(","); const dp = S.querySelector("[data-daypick]");
-    dp.querySelectorAll("button").forEach(x => x.classList.toggle("on", ds.includes(x.dataset.val))); dp.nextElementSibling.value = ds.join(","); });
+  wireRecur(S, "start");
 }
 
 /* ---------- Food tracker ---------- */
@@ -1866,9 +1936,9 @@ function viewSettings(){
     <div class="row"><div class="grow t">Goal</div><input class="num" id="set-sleep-goal" type="number" min="3" max="14" step="0.5" inputmode="decimal" value="${c.sleep.goal}"><span class="sub">hours</span></div>
   </div>
 
-  <h2>Daily habits</h2>
+  <h2>Habits</h2>
   <div class="card">
-    <div data-reorder="habits">${hs.map(h => `<div class="row" data-oid="${h.id}">${hs.length > 1 ? GRIP : ""}<input class="inl" data-hab-title="${h.id}" value="${esc(h.title)}" aria-label="Habit"><button type="button" class="ghost" data-hab-del="${h.id}" aria-label="Remove">✕</button></div>`).join("")}</div>
+    <div data-reorder="habits">${hs.map(h => `<div class="row" data-oid="${h.id}">${hs.length > 1 ? GRIP : ""}<input class="inl" data-hab-title="${h.id}" value="${esc(h.title)}" aria-label="Habit"><button type="button" class="link hsch" data-hab-sched="${h.id}">${esc(h.rep && h.rep.freq ? repeatText(h.rep, h.start) : "Daily")}</button><button type="button" class="ghost" data-hab-del="${h.id}" aria-label="Remove">✕</button></div>`).join("")}</div>
     <form class="row" data-form="newhab"><input class="inl" id="new-hab" placeholder="Add a habit…" autocomplete="off"><button class="btn sm">Add</button></form>
   </div>
 
@@ -1942,10 +2012,46 @@ function taskSheet(id, preset = {}){
     <div class="fld"><span>Category & tags</span>${catPicker(catOf(t), extraIds(t))}</div>
     <div class="two"><label class="fld"><span>Date (blank = someday)</span><input type="date" name="due" value="${esc(t.due||"")}"></label>
     <label class="fld"><span>Time (makes it a reminder)</span><input type="time" name="time" value="${esc(t.time||"")}"></label></div>
+    ${recurFields(t.repeat, t.due || today())}
+    <label class="fld rp-regen" style="display:flex;align-items:center;gap:12px;margin-top:-4px"><span style="margin:0;flex:1">Count from when I finish<span class="sub" style="display:block;text-transform:none;letter-spacing:0;font-family:var(--sans)">The next one is due that long after you check this off, not on a fixed schedule.</span></span><input type="checkbox" class="switch" name="regen" ${t.repeat && t.repeat.regen ? "checked" : ""}></label>
     <label class="fld"><span>Notes</span><textarea name="notes">${esc(t.notes||"")}</textarea></label>
     ${id && t.due && t.time ? `<div style="margin:-2px 0 12px"><a class="link" target="_blank" rel="noopener" href="${gcalLink(t.title, t.due, t.time, 15, t.notes)}">Get a phone alert via Google Calendar ↗</a></div>` : ""}`,
-    f => { const title = f.title.value.trim(); if (!title) return "Give it a name."; const nid = id || uid(); put(nid, {...(items[nid]||{kind:"task", done:false, created:Date.now()}), title, cat: f.cat.value, tags: f.tags.value.split(",").filter(Boolean), due: f.due.value || null, time: f.due.value ? (f.time.value || null) : null, notes: f.notes.value}); },
+    f => { const title = f.title.value.trim(); if (!title) return "Give it a name.";
+      const rep = readRecur(f, f.due.value || today()); if (typeof rep === "string") return rep;
+      if (rep && !f.due.value) return "Pick a date for a repeating task.";
+      if (rep && f.regen.checked && rep.freq !== "weekdays"){ rep.regen = true; delete rep.mode; delete rep.days; }
+      const nid = id || uid(), old = items[nid] || {kind:"task", done:false, created:Date.now()};
+      const same = old.repeat && rep && JSON.stringify({...old.repeat}) === JSON.stringify(rep);
+      put(nid, {...old, title, cat: f.cat.value, tags: f.tags.value.split(",").filter(Boolean), due: f.due.value || null, time: f.due.value ? (f.time.value || null) : null, notes: f.notes.value,
+        repeat: rep, rstart: rep ? (same && old.rstart ? old.rstart : f.due.value) : null, rn: rep ? (same && old.rn ? old.rn : 1) : null}); },
     id ? () => { del(id); } : null);
+  const S = $(".sheet"); wireRecur(S, "due");
+  const rg = () => { const fq = S.querySelector("[name=freq]").value; S.querySelector(".rp-regen").style.display = fq === "none" || fq === "weekdays" ? "none" : ""; };
+  S.querySelector("[name=freq]").addEventListener("change", rg); rg();
+}
+function addUnits(d, freq, n){ const a = parse(d);
+  if (freq === "daily") return addDays(d, n); if (freq === "weekly") return addDays(d, 7 * n);
+  const m = freq === "monthly" ? n : 12 * n, t = new Date(a.getFullYear(), a.getMonth() + m, 1); t.setDate(Math.min(a.getDate(), dim(t))); return ymd(t); }
+function nextTaskDue(t){
+  const r = t.repeat; if (!r || !r.freq || !t.due) return null;
+  if (r.count && (t.rn || 1) >= r.count) return null;
+  let nx;
+  if (r.regen) nx = addUnits(today() > t.due ? today() : t.due, r.freq, Math.max(1, r.interval || 1));
+  else nx = nextOcc({date: t.rstart || t.due, repeat: {...r, count: 0}, ex: []}, addDays(t.due, 1));
+  if (!nx || (r.until && nx > r.until)) return null;
+  return nx;
+}
+function toggleTask(id){
+  const t = items[id]; if (!t) return;
+  if (!t.done){
+    const nx = nextTaskDue(t); let spawned = null;
+    if (nx){ spawned = uid(); const {order, ...rest} = t; put(spawned, {...rest, done: false, doneAt: null, created: Date.now(), due: nx, rn: (t.rn || 1) + 1, spawned: null}, {silent: true}); }
+    put(id, {...t, done: true, doneAt: Date.now(), spawned});
+    if (nx) toast(`Next one: ${relDay(nx)}`);
+  } else {
+    const sp = t.spawned && items[t.spawned]; if (sp && !sp.done) del(t.spawned);
+    put(id, {...t, done: false, doneAt: null, spawned: null});
+  }
 }
 function eventSheet(id, preset = {}){
   const src = id ? items[id] : null;
@@ -1955,8 +2061,6 @@ function eventSheet(id, preset = {}){
   // when editing one occurrence, show that occurrence's dates
   let date = e.date, endDate = e.endDate || "";
   if (isSeries && occ && occ !== e.date){ const sp = spanOf(e); date = occ; endDate = sp ? addDays(occ, sp) : ""; }
-  const r = e.repeat || {}, freq = r.freq || "none", ends = r.until ? "on" : r.count ? "after" : "never";
-  const days = r.days && r.days.length ? r.days : [parse(date).getDay()];
   const allDay = !!e.allDay || (src && !e.start);
   sheet(id ? "Event" : "New event", `
     ${isSeries ? `<div class="fld"><span>Apply changes to</span><div class="seg" data-seg="scope"><button type="button" data-val="one" class="on">This event</button><button type="button" data-val="all">All in series</button></div><input type="hidden" name="scope" value="one"></div>` : ""}
@@ -1968,12 +2072,7 @@ function eventSheet(id, preset = {}){
     <div class="two"><label class="fld"><span>Ends (blank = same day)</span><input type="date" name="enddate" value="${esc(endDate)}"></label>
       <label class="fld tm"><span>End time</span><input type="time" name="end" value="${esc(e.end||"")}"></label></div>
     <label class="fld"><span>Location</span><input name="location" value="${esc(e.location||"")}" placeholder="Add a place"></label>
-    <div class="two"><label class="fld"><span>Repeat</span><select name="freq">${Object.entries(FREQ).map(([k,l]) => `<option value="${k}" ${k===freq?"selected":""}>${l}</option>`).join("")}</select></label>
-      <label class="fld rp-iv"><span>Every</span><input type="number" name="interval" min="1" max="99" value="${r.interval||1}" inputmode="numeric"></label></div>
-    <div class="fld rp-days"><span>On</span><div class="chips" data-daypick style="margin-top:0">${DOW.map((d, i) => `<button type="button" class="chip ${days.includes(i)?"on":""}" data-val="${i}">${d.slice(0,2)}</button>`).join("")}</div><input type="hidden" name="days" value="${days.join(",")}"></div>
-    <div class="two rp-end"><label class="fld"><span>Ends</span><select name="ends"><option value="never" ${ends==="never"?"selected":""}>Never</option><option value="on" ${ends==="on"?"selected":""}>On a date</option><option value="after" ${ends==="after"?"selected":""}>After a number of times</option></select></label>
-      <label class="fld rp-until"><span>End date</span><input type="date" name="until" value="${esc(r.until||"")}"></label>
-      <label class="fld rp-count"><span>Times</span><input type="number" name="count" min="1" max="999" value="${r.count||10}" inputmode="numeric"></label></div>
+    ${recurFields(e.repeat, date)}
     <div class="two"><label class="fld"><span>Reminder</span><select name="remind">${REMIND.map(([v,l]) => `<option value="${v}" ${String(e.remind ?? "")===v?"selected":""}>${l}</option>`).join("")}</select></label>
       <label class="fld"><span>Show as</span><select name="show">${Object.entries(SHOW).map(([k,l]) => `<option value="${k}" ${(e.show||"busy")===k?"selected":""}>${l}</option>`).join("")}</select></label></div>
     <label class="fld"><span>Notes</span><textarea name="note">${esc(e.note||"")}</textarea></label>
@@ -1983,15 +2082,7 @@ function eventSheet(id, preset = {}){
       const ad = f.allday.checked || !f.start.value;
       const d0 = f.date.value, ed = f.enddate.value && f.enddate.value > d0 ? f.enddate.value : null;
       if (!ad && !ed && f.end.value && f.end.value < f.start.value) return "End time is before the start time.";
-      const fq = f.freq.value;
-      let rep = null;
-      if (fq !== "none"){
-        rep = {freq: fq, interval: Math.max(1, Math.min(99, parseInt(f.interval.value) || 1))};
-        if (fq === "weekly") rep.days = f.days.value.split(",").filter(x => x !== "").map(Number);
-        if (fq === "weekly" && !rep.days.length) rep.days = [parse(d0).getDay()];
-        if (f.ends.value === "on"){ if (!f.until.value) return "Pick when the repeat ends."; if (f.until.value < d0) return "Repeat end is before the start."; rep.until = f.until.value; }
-        if (f.ends.value === "after") rep.count = Math.max(1, parseInt(f.count.value) || 1);
-      }
+      const rep = readRecur(f, d0); if (typeof rep === "string") return rep;
       const body = {title, cat: f.cat.value, tags: f.tags.value.split(",").filter(Boolean), allDay: ad, date: d0, endDate: ed,
         start: ad ? null : f.start.value, end: ad ? null : (f.end.value || null), location: f.location.value.trim(),
         repeat: rep, remind: f.remind.value === "" ? null : Number(f.remind.value), show: f.show.value, note: f.note.value};
@@ -2009,7 +2100,7 @@ function eventSheet(id, preset = {}){
     },
     id ? () => {
       if (!isSeries){ confirmSheet("Delete this event?", "This can't be undone.", () => del(id)); return; }
-      sheet("Delete repeating event", `<div class="sub" style="margin-bottom:12px">${esc(e.title)} · ${esc(repeatText(e.repeat))}</div>
+      sheet("Delete repeating event", `<div class="sub" style="margin-bottom:12px">${esc(e.title)} · ${esc(repeatText(e.repeat, e.date))}</div>
         <div class="chips"><button type="button" class="btn" data-del-one>Only ${esc(fmtDay(occ))}</button><button type="button" class="btn danger" data-del-all>The whole series</button></div>`, () => {}, null, "Cancel");
       const S = $(".sheet");
       S.querySelector("[data-del-one]").onclick = () => { put(id, {...items[id], ex: [...new Set([...(items[id].ex || []), occ])]}); $(".scrim")?.remove(); };
@@ -2017,16 +2108,9 @@ function eventSheet(id, preset = {}){
     } : null);
   // dynamic fields
   const S = $(".sheet"), F = S.querySelector("form") || S;
-  const sync = () => {
-    const fq = F.querySelector("[name=freq]").value, en = F.querySelector("[name=ends]").value, ad = F.querySelector("[name=allday]").checked;
-    S.querySelector(".rp-iv").style.display = fq === "none" || fq === "weekdays" ? "none" : "";
-    S.querySelector(".rp-days").style.display = fq === "weekly" ? "" : "none";
-    S.querySelector(".rp-end").style.display = fq === "none" ? "none" : "";
-    S.querySelector(".rp-until").style.display = en === "on" ? "" : "none";
-    S.querySelector(".rp-count").style.display = en === "after" ? "" : "none";
-    S.querySelectorAll(".tm").forEach(x => x.style.visibility = ad ? "hidden" : "");
-  };
-  F.querySelectorAll("[name=freq],[name=ends],[name=allday]").forEach(x => x.addEventListener("change", sync));
+  wireRecur(F, "date");
+  const sync = () => { const ad = F.querySelector("[name=allday]").checked; S.querySelectorAll(".tm").forEach(x => x.style.visibility = ad ? "hidden" : ""); };
+  F.querySelector("[name=allday]").addEventListener("change", sync);
   sync();
 }
 
@@ -2090,7 +2174,7 @@ function render(){
 
 /* ---------- events ---------- */
 document.addEventListener("click", e => {
-  const el = e.target.closest("[data-plan],[data-repeat],[data-foodtab],[data-foodday],[data-food-add],[data-food-edit],[data-food-del],[data-food-item],[data-food-sex],[data-food-act],[data-food-goal],[data-kit-on],[data-kit-preset],[data-kit-font],[data-kit-reset],[data-goal-open],[data-goal-close],[data-goal-quick],[data-gstep],[data-gstep-del],[data-glog-del],[data-calview],[data-weeknav],[data-tag-del],[data-theme-pick],[data-toggle],[data-meal-up],[data-meal-del],[data-hab-up],[data-hab-del],[data-waterset],[data-notesmode],[data-open-journal],[data-water],[data-meal],[data-food],[data-quality],[data-range],[data-catfilter],[data-quickcat],[data-go],[data-act],[data-toggle-task],[data-edit-task],[data-edit-event],[data-habit],[data-viewday],[data-calsel],[data-calnav],[data-taskfilter],[data-quickdue],[data-open-note],[data-open-html]");
+  const el = e.target.closest("[data-plan],[data-repeat],[data-foodtab],[data-foodday],[data-food-add],[data-food-edit],[data-food-del],[data-food-item],[data-food-sex],[data-food-act],[data-food-goal],[data-kit-on],[data-kit-preset],[data-kit-font],[data-kit-reset],[data-goal-open],[data-goal-close],[data-goal-quick],[data-gstep],[data-gstep-del],[data-glog-del],[data-calview],[data-weeknav],[data-tag-del],[data-theme-pick],[data-toggle],[data-meal-up],[data-meal-del],[data-hab-up],[data-hab-sched],[data-hab-del],[data-waterset],[data-notesmode],[data-open-journal],[data-water],[data-meal],[data-food],[data-quality],[data-range],[data-catfilter],[data-quickcat],[data-go],[data-act],[data-toggle-task],[data-edit-task],[data-edit-event],[data-habit],[data-viewday],[data-calsel],[data-calnav],[data-taskfilter],[data-quickdue],[data-open-note],[data-open-html]");
   if (!el) return;
   const d = el.dataset;
   if (d.go){ if (d.mode) notesMode = d.mode; if (d.foodtabGo) foodTab = d.foodtabGo; go(d.go); return; }
@@ -2125,6 +2209,7 @@ document.addEventListener("click", e => {
   if (d.mealUp){ const c = cfg(); moveUp([...c.meals.list], d.mealUp, l => saveCfg({mealsCfg: {...c.meals, list: l}})); return; }
   if (d.mealDel){ const c = cfg(); saveCfg({mealsCfg: {...c.meals, list: c.meals.list.filter(m => m.id !== d.mealDel)}}); return; }
   if (d.habUp){ const l = habitsList(); const i = l.findIndex(h => h.id === d.habUp); if (i < 1) return; l.splice(i-1, 0, l.splice(i,1)[0]); l.forEach((h, j) => { if (h.order !== j) put(h.id, {...items[h.id], order:j}, {silent:true}); }); render(); return; }
+  if (d.habSched){ habitSheet(d.habSched); return; }
   if (d.habDel){ put(d.habDel, {...items[d.habDel], archived:true}); return; }
   if (d.waterset){ const c = cfg().water, cur = waterAmt(dayDoc(viewDay)) || 0, v = r1(Number(d.waterset) * c.step); setWater(viewDay, Math.abs(cur - v) < 1e-6 ? r1(v - c.step) : v); return; }
   if (d.notesmode){ notesMode = d.notesmode; noteQuery = ""; render(); return; }
@@ -2136,7 +2221,7 @@ document.addEventListener("click", e => {
   if (d.range){ bodyRange = Number(d.range); render(); return; }
   if (d.catfilter){ catFilter = d.catfilter; render(); return; }
   if (d.quickcat){ quickCat = d.quickcat; render(); return; }
-  if (d.toggleTask){ const t = items[d.toggleTask]; if (t) put(d.toggleTask, {...t, done: !t.done, doneAt: !t.done ? Date.now() : null}); return; }
+  if (d.toggleTask){ toggleTask(d.toggleTask); return; }
   if (d.editTask){ taskSheet(d.editTask); return; }
   if (d.editEvent){ eventSheet(d.editEvent, {occ: d.occ}); return; }
   if (d.habit){ const dd = dayDoc(viewDay); const done = {...(dd.done||{})}; if (done[d.habit]) delete done[d.habit]; else done[d.habit] = true; put("day-" + viewDay, {...dd, kind:"day", date:viewDay, done}); return; }
