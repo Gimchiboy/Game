@@ -365,7 +365,9 @@ html[data-theme="handheld"] .switch,html[data-theme="handheld"] .switch::after{b
 .row .num + .sub{min-width:44px}
 .hsch{flex:none;max-width:42%;text-align:right;font-size:12px;padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .petdev{margin-top:16px;padding:14px;border-radius:28px;background:var(--bezel, var(--lcd-2));display:grid;gap:12px}
-.prow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.prow:last-child{grid-template-columns:repeat(5,1fr)}.prow.two{grid-template-columns:1fr 1fr}
+.prow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.pmeter{width:46%;height:8px;border-radius:4px;background:var(--line);overflow:hidden;flex:none}.pmeter i{display:block;height:100%;background:var(--ink);border-radius:4px}
+.pdid{margin:8px 0 2px;font-size:14px;color:var(--ink);text-align:center}.pdid span{color:var(--muted)}.prow.two{grid-template-columns:1fr 1fr}
 .pbtn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:12px;background:var(--lcd);color:var(--ink);border:1px solid var(--line);font:500 10px/1.1 var(--pix);text-transform:uppercase;letter-spacing:calc(var(--label-track) * .3);min-width:0}
 .pbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .pbtn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
@@ -2576,6 +2578,19 @@ function newPet(name, genes, gen, parents){
     hunger: 0, happy: 0, disc: 0, weight: 5, poops: 0, sick: false, doses: 0, asleep: false, lights: true,
     hT: 0, pT: 0, poopMin: 0, zeroMin: 0, sickMin: 0, call: null, care: 0, discM: 0, sCare: 0, sDisc: 0, nextFalse: null, lifeEnd: null, paused: false, dead: null, hatched: null};
 }
+const HABITS = [["eat", "Feeds itself", 1, "found itself a bite"], ["play", "Plays alone", 1, "played by itself"], ["tidy", "Tidies up", 1, "tidied up"], ["mess", "Makes messes", -1, "made a mess"], ["sulk", "Sulks", -1, "sulked in the corner"], ["whine", "Fake calls", -1, ""]];
+const HAB = Object.fromEntries(HABITS.map(h => [h[0], h]));
+const PET_FB = 60 * MIN, c100 = v => Math.round(Math.max(0, Math.min(100, v)) * 100) / 100, cHab = v => Math.round(Math.max(.05, Math.min(.9, v)) * 1000) / 1000;
+function petInit(P){
+  const T = temperOf(P.genes);
+  if (!P.hab) P.hab = {eat: cHab(.2 + .15 * T.app), play: cHab(.2 + .15 * T.en), tidy: .15, mess: cHab(.25 + .2 * T.bold), sulk: cHab(.2 + .15 * (1 - T.bold)), whine: .5};
+  if (!P.ch) P.ch = {en: 70, st: 10, im: 70};
+  return T;
+}
+const petLr = T => .08 + .17 * (1 - T.stub);
+const petFalseGap = (P, x) => (3 + x * 5) * HOUR / (.4 + 1.2 * ((P.hab || {}).whine ?? .5));
+function petTeach(P, k, dir){ const T = petInit(P); P.hab[k] = cHab(P.hab[k] + dir * petLr(T)); }
+function petCanFb(P, t = Date.now()){ return !!(P && P.act && !P.act.fb && t - P.act.at <= PET_FB && !P.dead); }
 function petAsleepAt(t){
   const c = petCfg(), d = new Date(t), m = d.getHours() * 60 + d.getMinutes();
   const [bh, bm] = c.bed.split(":").map(Number), [wh, wm] = c.wake.split(":").map(Number), b = bh * 60 + bm, w = wh * 60 + wm;
@@ -2584,7 +2599,7 @@ function petAsleepAt(t){
 function petDie(P, t, why){ P.dead = {at: t, why}; P.call = null; P.asleep = false; }
 function petEvolve(P, t){
   const age = t - (P.hatched || P.born);
-  if (P.stage === "baby" && t - P.stageAt >= PET_STAGES.baby.len){ P.stage = "child"; P.form = "tuft"; P.stageAt = t; P.sCare = 0; P.sDisc = 0; P.weight = Math.max(P.weight, 10); P.nextFalse = t + (3 + petRng(P, t / MIN, 7) * 5) * HOUR; return true; }
+  if (P.stage === "baby" && t - P.stageAt >= PET_STAGES.baby.len){ P.stage = "child"; P.form = "tuft"; P.stageAt = t; P.sCare = 0; P.sDisc = 0; P.weight = Math.max(P.weight, 10); P.nextFalse = t + petFalseGap(P, petRng(P, t / MIN, 7)); return true; }
   if (P.stage === "child" && age >= PET_STAGES.child.until){ P.stage = "teen"; P.form = P.sCare <= 3 ? "sprout" : "lump"; P.stageAt = t; P.sCare = 0; P.sDisc = 0; P.weight = Math.max(P.weight, 20); return true; }
   if (P.stage === "teen" && age >= PET_STAGES.teen.until){
     const c = P.sCare, d = P.sDisc;
@@ -2598,6 +2613,7 @@ function petStep(P, t){
   if (P.dead) return;
   const n = t / MIN;
   if (P.stage === "egg"){ if (t - P.stageAt >= PET_STAGES.egg.len){ P.stage = "baby"; P.form = "pip"; P.stageAt = t; P.hatched = t; P.hunger = 0; P.happy = 0; P.weight = 5; } return; }
+  const T = petInit(P), C = P.ch;
   petEvolve(P, t);
   if (P.stage === "adult" && P.lifeEnd && t >= P.lifeEnd){ petDie(P, t, "age"); return; }
   const S = PET_STAGES[P.stage];
@@ -2607,13 +2623,32 @@ function petStep(P, t){
   // sickness and neglect clocks run day and night
   if (P.sick){ P.sickMin++; if (P.sickMin >= PET_RULES.sickDie){ petDie(P, t, "sick"); return; } }
   if ((P.hunger === 0 || P.happy === 0) && !P.asleep){ P.zeroMin++; if (P.zeroMin >= PET_RULES.zeroDie){ petDie(P, t, "neglect"); return; } if (P.zeroMin >= PET_RULES.zeroSick && !P.sick) petSicken(P, n); } else if (P.hunger > 0 && P.happy > 0) P.zeroMin = 0;
-  if (P.poops > 0){ P.poopMin++; if (P.poopMin >= PET_RULES.poopSick && !P.sick) petSicken(P, n); } else P.poopMin = 0;
+  if (P.poops > 0){ P.poopMin++; if (P.poopMin >= PET_RULES.poopSick * (.6 + .8 * C.im / 100) && !P.sick) petSicken(P, n); } else P.poopMin = 0;
+  // body chemistry: energy, stress, immunity
+  { const bad = P.hunger === 0 || P.happy === 0;
+    if (P.asleep){ C.en += P.lights ? .1 : .2; C.st -= .1; }
+    else { C.en -= .05 + .03 * T.en; C.st += bad ? .2 : 0; C.st += P.poops >= 2 ? .05 * P.poops : 0; if (!bad && P.poops < 2 && !P.sick) C.st -= .05; }
+    if (P.sick) C.st += .1;
+    C.en = c100(C.en); C.st = c100(C.st);
+    const target = 100 - C.st * .6 - (C.en < 20 ? 20 : 0) - (P.weight > S.minW + PET_RULES.overW ? 15 : 0);
+    C.im = c100(C.im + (target - C.im) * .01);
+    if (!P.sick && C.im < 40 && petRng(P, n, 21) < (40 - C.im) / 40 / 600) petSicken(P, n);
+    else if (P.sick && C.im > 70 && petRng(P, n, 22) < 1 / 240){ P.doses--; if (P.doses <= 0){ P.sick = false; P.sickMin = 0; } } }
   if (!P.asleep){
-    P.hT++; if (P.hT >= S.hunger){ P.hT = 0; P.hunger = Math.max(0, P.hunger - 1); }
-    P.happyT = (P.happyT || 0) + 1; if (P.happyT >= S.happy){ P.happyT = 0; P.happy = Math.max(0, P.happy - 1); }
+    P.hT++; if (P.hT >= Math.round(S.hunger * (1.25 - .5 * T.app))){ P.hT = 0; P.hunger = Math.max(0, P.hunger - 1); }
+    P.happyT = (P.happyT || 0) + 1; if (P.happyT >= Math.round(S.happy * (1.2 - .4 * T.en) * (C.st > 70 ? .67 : 1))){ P.happyT = 0; P.happy = Math.max(0, P.happy - 1); }
+    // things it does on its own; praise or scold afterwards shapes the habit
+    if (P.lights && !P.sick && C.en >= 20 && petRng(P, n, 23) < (.6 + .8 * T.en) / 50){
+      const H = P.hab, o = [["", 1]];
+      if (P.hunger <= 1) o.push(["eat", H.eat * 2]); if (P.happy <= 2) o.push(["play", H.play * 1.5]); if (P.poops > 0) o.push(["tidy", H.tidy * 1.5]);
+      if (P.poops < 4) o.push(["mess", H.mess * .35]); if (P.happy > 0 && C.st > 30) o.push(["sulk", H.sulk * C.st / 60]);
+      let x = petRng(P, n, 24) * o.reduce((a, b) => a + b[1], 0), k = ""; for (const [kk, w] of o){ x -= w; if (x < 0){ k = kk; break; } }
+      if (k === "eat"){ P.hunger++; P.weight++; } else if (k === "play"){ P.happy++; C.en = c100(C.en - 3); } else if (k === "tidy"){ P.poops--; if (!P.poops) P.poopMin = 0; } else if (k === "mess") P.poops++; else if (k === "sulk") P.happy--;
+      if (k) P.act = {k, at: t};
+    }
     P.pT++; if (P.pT >= S.poop){ P.pT = 0; if (P.poops < 4) P.poops++; }
     if ((P.stage === "child" || P.stage === "teen") && P.disc < 100 && P.nextFalse && t >= P.nextFalse && !P.call){
-      P.call = {type: "false", at: t, counted: false}; P.nextFalse = t + (3 + petRng(P, n, 3) * 5) * HOUR; }
+      P.call = {type: "false", at: t, counted: false}; P.nextFalse = t + petFalseGap(P, petRng(P, n, 3)); }
   }
   // calls
   const need = P.hunger === 0 || P.happy === 0 || P.sick;
@@ -2623,8 +2658,8 @@ function petStep(P, t){
     if (P.call.type === "need" && !need) P.call = null;
     else if (P.call.type === "lights" && (!P.lights || !P.asleep)) P.call = null;
     else if (age >= PET_RULES.callGrace && !P.call.counted){
-      if (P.call.type === "false"){ P.discM++; P.sDisc++; P.call = null; }
-      else { P.care++; P.sCare++; P.call.counted = true; }
+      if (P.call.type === "false"){ P.discM++; P.sDisc++; P.call = null; P.hab.whine = cHab(P.hab.whine + petLr(T) / 2); }
+      else { P.care++; P.sCare++; P.call.counted = true; C.st = c100(C.st + 10 * (.5 + T.soc)); }
     }
   }
 }
@@ -2645,16 +2680,23 @@ function petShow(kind, ms = 1600){ petAnim = {kind, until: Date.now() + ms}; pet
 function petAct(a){
   let P = petNow(); if (!P) return;
   P = JSON.parse(JSON.stringify(P));
-  const S = PET_STAGES[P.stage] || {}, minW = S.minW || 5, t = Date.now();
+  const S = PET_STAGES[P.stage] || {}, minW = S.minW || 5, t = Date.now(), T = petInit(P), C = P.ch;
   if (a === "lights"){ P.lights = !P.lights; if (!P.lights && P.call && P.call.type === "lights") P.call = null; petSave(P, false); return; }
   if (P.dead || P.stage === "egg"){ toast(P.dead ? "Start a new egg below." : "It hasn't hatched yet."); return; }
   if (P.asleep && !["status", "clean", "med"].includes(a)){ toast("Shh, it's asleep."); return; }
   if (!P.lights && !P.asleep && a !== "status"){ toast("Turn the light on first."); return; }
-  if (a === "meal"){ if (P.hunger >= 4){ petShow("no"); return; } P.hunger++; P.weight++; petShow("meal"); }
-  else if (a === "snack"){ P.happy = Math.min(4, P.happy + 1); P.weight += 2; if (P.weight > minW + PET_RULES.overW && !P.sick && Math.random() < 0.5){ P.sick = true; P.sickMin = 0; P.doses = 1 + (Math.random() < 0.5 ? 1 : 0); } petShow("snack"); }
+  if (a === "meal"){ if (P.hunger >= 4){ petShow("no"); return; } P.hunger++; P.weight++; C.en = c100(C.en + 10); petShow("meal"); }
+  else if (a === "snack"){ P.happy = Math.min(4, P.happy + 1); P.weight += 2; C.en = c100(C.en + 5); C.st = c100(C.st - 3); if (P.weight > minW + PET_RULES.overW && !P.sick && Math.random() < 0.5){ P.sick = true; P.sickMin = 0; P.doses = 1 + (Math.random() < 0.5 ? 1 : 0); } petShow("snack"); }
   else if (a === "clean"){ if (!P.poops){ petShow("no"); return; } P.poops = 0; P.poopMin = 0; petShow("clean"); }
   else if (a === "med"){ if (!P.sick){ petShow("no"); return; } P.doses--; if (P.doses <= 0){ P.sick = false; P.sickMin = 0; toast("All better."); } else toast("One more dose needed."); petShow("med"); }
-  else if (a === "scold"){ if (!P.call || P.call.type !== "false"){ petShow("no"); toast("It wasn't misbehaving."); return; } P.disc = Math.min(100, P.disc + 25); P.call = null; petShow("scold"); }
+  else if (a === "scold"){
+    if (P.call && P.call.type === "false"){ P.disc = Math.min(100, P.disc + 25); P.call = null; petTeach(P, "whine", -1); petShow("scold"); }
+    else if (petCanFb(P, t)){ const h = HAB[P.act.k]; petTeach(P, h[0], -1); P.act.fb = true; C.st = c100(C.st + (h[2] > 0 ? 8 * (1.3 - T.bold) : 3)); toast(h[2] > 0 ? "It'll do that less. That was a good habit, though." : "It'll do that less."); petShow("scold"); }
+    else { C.st = c100(C.st + 6 * (1.3 - T.bold)); petSave(P); petShow("no"); toast("It wasn't misbehaving. That upset it."); return; } }
+  else if (a === "praise"){
+    if (!petCanFb(P, t)){ petShow("no"); toast("Nothing to praise right now."); return; }
+    const h = HAB[P.act.k]; petTeach(P, h[0], 1); P.act.fb = true; C.st = c100(C.st - 6); if (T.soc >= .6) P.happy = Math.min(4, P.happy + 1);
+    toast(h[2] > 0 ? "It'll do that more." : "Careful, that encourages it."); petShow("praise"); }
   else if (a === "play"){ petGame = {round: 0, wins: 0, look: null, res: null}; petPaint(); petRender(); return; }
   if (P.call && P.call.type === "need" && P.hunger > 0 && P.happy > 0 && !P.sick) P.call = null;
   P.weight = Math.max(minW, P.weight);
@@ -2668,7 +2710,7 @@ function petGuess(dir){
     if (!petGame) return;
     if (g.round >= 5){
       let P = JSON.parse(JSON.stringify(petNow())); const minW = (PET_STAGES[P.stage] || {}).minW || 5;
-      P.weight = Math.max(minW, P.weight - 1); if (g.wins >= 3) P.happy = Math.min(4, P.happy + 1);
+      P.weight = Math.max(minW, P.weight - 1); if (g.wins >= 3){ P.happy = Math.min(4, P.happy + 1); petInit(P); P.ch.st = c100(P.ch.st - 10); }
       if (P.call && P.call.type === "need" && P.hunger > 0 && P.happy > 0 && !P.sick) P.call = null;
       toast(g.wins >= 3 ? `Won ${g.wins} of 5. It's happier.` : `Won ${g.wins} of 5. Need 3 to cheer it up.`);
       petGame = null; petSave(P, false); return;
@@ -2695,6 +2737,7 @@ function petScreen(P, frame){
     r.push(paintGrid(G, Math.max(0, Math.min(48 - w, x)), y, {flip: !P.asleep && !A && petDir < 0, sleep: P.asleep, genes: P.genes}));
     if (P.asleep){ r.push(dIcon("z", 2, 1.5 + (frame % 2) * .6)); r.push(`<g transform="translate(5.5 -1) scale(.7)">${dIcon("z", 2, 1.5)}</g>`); }
     if (P.sick) r.push(dIcon("skull", .5, .5));
+    if (A === "praise") r.push(dIcon("heart", 3, 1));
     if (A === "scold") r.push(`<rect x="3" y="1" width="1" height="5"/><rect x="3" y="7" width="1" height="1"/>`);
     if (A !== "clean"){ const PP = [[40, 17], [40, 9], [32, 17], [32, 9]]; for (let i = 0; i < P.poops; i++) r.push(dIcon("poop", PP[i][0], PP[i][1] + .3)); }
     if (A === "clean"){ const f = 1 - (petAnim.until - Date.now()) / 1600; r.push(`<rect x="${Math.round(48 - f * 48)}" y="0" width="1" height="24"/>`); }
@@ -2717,7 +2760,8 @@ function petOverlay(P){
     `<div class="pl">Discipline</div><div class="pbar"><i style="width:${P.disc}%"></i></div>`,
     `<div class="pl">${esc(PET_FORMS[P.form])} · ${PET_STAGES[P.stage].n} · Gen ${P.gen || 1}</div><div>Age ${ageD} day${ageD === 1 ? "" : "s"} · ${P.weight} g</div>${P.genes && P.genes.kind ? `<div class="sub2">${KIND_N[P.genes.kind]} · ${esc(colorsOf(P.genes).n)}</div>` : ""}`,
   ];
-  return `<div class="pov" data-pet="status">${pages[(petStat - 1) % 4]}</div>`;
+  pages.push(`<div class="pl">Temperament</div><div style="font-size:12px;text-align:center;padding:0 8px">${esc(temperWords(P.genes))}</div>`);
+  return `<div class="pov" data-pet="status">${pages[(petStat - 1) % 5]}</div>`;
 }
 function petTick(){
   petFrame++;
@@ -2741,6 +2785,7 @@ const PI = {
   clean: `<path d="M4 20h16M6 20l2-9h8l2 9M10 11V4h4v7"/>`,
   status: `<path d="M5 20V10M10 20V4M15 20v-7M20 20V8"/>`,
   scold: `<path d="M12 4v10M12 18v2"/>`,
+  praise: `<path d="M12 20s-7-4.4-7-9.5A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.5C19 15.6 12 20 12 20z"/>`,
   call: `<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 20a2 2 0 0 0 4 0"/>`,
 };
 function petBtn(k, label, extra = ""){ return `<button class="pbtn ${extra}" data-pet="${k}" ${k === "lights" ? `aria-pressed="${extra ? "false" : "true"}"` : ""}><svg viewBox="0 0 24 24">${PI[k]}</svg><span>${label}</span></button>`; }
@@ -2751,7 +2796,11 @@ function viewPet(){
     <p>It lives in real time, even when Base is closed. When you come back, everything that happened while you were away is played out.</p>
     <p><b>Hungry and Happy</b> each have 4 hearts that drain while it's awake. Meals fill Hungry. Snacks and winning the game fill Happy. Check them with Status.</p>
     <p><b>Calls.</b> The bell lights up when a heart hits zero, when it's sick, or when it falls asleep with the light on. Answer within 15 minutes or it counts as a care mistake.</p>
-    <p><b>Fake calls.</b> Children and teens sometimes call when nothing is wrong. If Status shows full hearts, tap Scold. Ignoring a fake call is a discipline mistake. Scold at the wrong time and nothing happens.</p>
+    <p><b>Fake calls.</b> Children and teens sometimes call when nothing is wrong. If Status shows full hearts, tap Scold. Ignoring a fake call is a discipline mistake.</p>
+    <p><b>It does things on its own.</b> Now and then it finds a bite, plays alone, tidies up, makes a mess or sulks. A line under the screen tells you what it did. For the next hour you can Praise or Scold it: praise makes that habit stronger, scolding makes it weaker. Praising a mess encourages messes. Scolding when it did nothing wrong stresses it.</p>
+    <p><b>Habits</b> are listed below the pet. A well-taught pet feeds and cleans up after itself more often and makes fewer fake calls.</p>
+    <p><b>Personality</b> is in its genes: appetite, energy, boldness, stubbornness and attachment. Greedy pets get hungry sooner, lively ones get bored sooner and do more, shy ones take scolding harder, stubborn ones learn slowly, and clingy ones love praise but hate being ignored. Children get a mix of both parents, with the odd surprise.</p>
+    <p><b>Body.</b> Energy drains while awake and refills during sleep, twice as fast with the light off. A worn-out pet stops doing things on its own. Stress builds from empty hearts, mess, sickness and ignored calls, and fades with praise, snacks, won games and rest. Immunity follows from both: low immunity means random illness and mess making it sick sooner, while high immunity lets it sometimes shake off sickness without medicine.</p>
     <p><b>Poop</b> comes every few hours. Left for 2 hours, it makes it sick. Medicine takes 1 or 2 doses.</p>
     <p><b>Weight</b> goes up with food (meal +1 g, snack +2 g) and down with each game. Snacks while it's overweight can make it sick.</p>
     <p><b>Sleep.</b> From bedtime to wake-up it sleeps and its hearts stop draining. Turn the light off when it falls asleep.</p>
@@ -2774,18 +2823,23 @@ function viewPet(){
   return `<div class="kicker">Virtual pet</div><h1>${esc(title)}</h1>
   <div class="sub">${P.dead ? esc(why[P.dead.why] || "") : P.paused ? "Paused" : P.stage === "egg" ? "Hatching soon" : `${esc(PET_FORMS[P.form])} · ${PET_STAGES[P.stage].n}${P.asleep ? " · asleep" : ""}`}</div>
   <div class="petdev">
-    <div class="prow">${petBtn("meal", "Meal")}${petBtn("snack", "Snack")}${petBtn("play", "Play")}${petBtn("med", "Medicine")}</div>
+    <div class="prow">${petBtn("meal", "Meal")}${petBtn("snack", "Snack")}${petBtn("play", "Play")}${petBtn("med", "Medicine")}${petBtn("clean", "Clean")}</div>
     <div class="pscreen" id="pet-screen">${petScreen(P, petFrame)}${petOverlay(P)}</div>
     ${petGame ? `<div class="pgame">${petGame.res ? (petGame.res === "hit" ? "Got it!" : "Missed") : "Which way will it look?"} <span>Round ${Math.min(5, petGame.round + (petGame.res ? 0 : 1))} of 5 · ${petGame.wins} won</span></div><div class="prow two"><button class="btn" data-pet="left">◀ Left</button><button class="btn" data-pet="right">Right ▶</button></div>` : ""}
-    <div class="prow">${petBtn("clean", "Clean")}${petBtn("lights", "Light", P.lights ? "" : "lit")}${petBtn("status", "Status")}${petBtn("scold", "Scold")}<span class="pbtn bell ${call ? "on" : ""}" aria-label="${call ? "Calling" : "Quiet"}"><svg viewBox="0 0 24 24">${PI.call}</svg><span>${call ? "Calling" : "Quiet"}</span></span></div>
+    ${petCanFb(P) && !petGame ? `<div class="pdid">It ${HAB[P.act.k][3]} <span>${(m => m < 1 ? "just now" : m + " min ago")(Math.floor((Date.now() - P.act.at) / MIN))}. Praise or scold to teach it.</span></div>` : ""}
+    <div class="prow">${petBtn("lights", "Light", P.lights ? "" : "lit")}${petBtn("status", "Status")}${petBtn("praise", "Praise")}${petBtn("scold", "Scold")}<span class="pbtn bell ${call ? "on" : ""}" aria-label="${call ? "Calling" : "Quiet"}"><svg viewBox="0 0 24 24">${PI.call}</svg><span>${call ? "Calling" : "Quiet"}</span></span></div>
   </div>
   ${!P.dead && P.stage === "adult" ? `<div class="chips" style="margin-top:14px"><button class="btn pri" data-pet-x="pair">Find a partner</button><button class="btn" data-pet-x="store">Store in collection</button><button class="btn" data-pet-x="tree">Family tree</button></div>` : !P.dead && P.parents && P.parents.length ? `<div style="margin-top:10px"><button class="link" data-pet-x="tree" style="padding:4px 0">Family tree</button></div>` : ""}
+  ${!P.dead && P.stage !== "egg" ? (() => { const T = petInit(P), m = (l, v, sub) => `<div class="row"><div class="grow"><div class="t">${l}</div>${sub ? `<div class="m">${sub}</div>` : ""}</div><div class="pmeter" role="img" aria-label="${l} ${Math.round(v)}%"><i style="width:${Math.round(v)}%"></i></div></div>`;
+    return `<h2>Body</h2><div class="card">${m("Energy", P.ch.en, P.ch.en < 20 ? "Worn out. Sleep with the light off restores it" : "")}${m("Stress", P.ch.st, P.ch.st > 70 ? "Its Happy hearts drain faster" : "")}${m("Immunity", P.ch.im, P.ch.im < 40 ? "It can fall ill out of nowhere" : "")}</div>
+    <h2>Personality</h2><div class="card"><div class="row"><div class="grow"><div class="t">${esc(temperWords(P.genes))}</div><div class="m">Born with it, and passed on to its children</div></div></div>${TRAITS.map(([k, , , n]) => m(n, T[k] * 100)).join("")}</div>
+    <h2>Habits</h2><div class="card">${HABITS.map(([k, n, g]) => m(n, P.hab[k] * 100, g > 0 ? "Good" : "Bad")).join("")}</div>`; })() : ""}
   ${P.dead ? `<form class="quick" data-form="pet-new" style="margin-top:16px"><input id="pet-name" placeholder="Name (optional)" autocomplete="off" maxlength="16"><button class="btn pri">New egg</button></form>` : ""}
   ${collectionHtml()}${how}${settings}${pastHtml}`;
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-pet-x]"); if (!b) return; const a = b.dataset.petX, P = petNow(); if (!P) return;
   if (a === "store") storePet(); else if (a === "pair") pairSheet("current"); else if (a === "tree") treeSheet(e0id(P)); });
-const petVis = P => P ? JSON.stringify([P.hunger, P.happy, !!P.call, P.asleep, !!P.dead, P.stage, P.form, P.poops, P.sick, P.lights, P.paused]) : "";
+const petVis = P => P ? JSON.stringify([P.act && P.act.at, P.act && P.act.fb, P.hunger, P.happy, !!P.call, P.asleep, !!P.dead, P.stage, P.form, P.poops, P.sick, P.lights, P.paused]) : "";
 function petRender(){ if (app === "pet") render(); }
 function petTodayRow(){
   const P = petNow(); if (!P || !petCfg().on) return "";
@@ -2798,7 +2852,7 @@ function petTodayRow(){
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-pet]"); if (!b || b.tagName === "INPUT") return;
   const a = b.dataset.pet;
-  if (a === "status"){ petStat = petStat >= 4 ? 0 : petStat + 1; petPaint(); return; }
+  if (a === "status"){ petStat = petStat >= 5 ? 0 : petStat + 1; petPaint(); return; }
   if (a === "left" || a === "right"){ petGuess(a[0]); return; }
   petStat = 0; petAct(a);
 });
@@ -2856,10 +2910,16 @@ function randGenes(r = Math.random){
   return {shape: pick(GENES.shape, r), top: pick(GENES.top, r), feet: w(GENES.feet, [5, 2, 2, 1]), arms: w(GENES.arms, [3, 1]),
     eyes: w(GENES.eyes, [4, 3, 2, 2, 1]), mouth: w(GENES.mouth, [4, 3, 2, 2, 1]), cheek: w(GENES.cheek, [4, 2, 2, 1]), pattern: w(GENES.pattern, [3, 2, 2, 1, 1, 1, 1]),
     kind: r() < .04 ? "rare" : pick(GENES.kind, r), rbody: pick(["comet", "moth"], r), abody: pick(GENES.abody, r), avar: pick(GENES.avar, r), pbody: pick(GENES.pbody, r), pvar: pick(GENES.pvar, r), gbody: pick(GENES.gbody, r), gvar: pick(GENES.gvar, r), ci: pick(GENES.ci, r),
-    ec: w(EYE_C, [6, 1, 1, 1, 1, 1]), ps: Math.floor(r() * 1e6)};
+    ec: w(EYE_C, [6, 1, 1, 1, 1, 1]), ps: Math.floor(r() * 1e6), t: randTemper(r)};
 }
+const TRAITS = [["app", "Greedy", "Light eater", "Appetite"], ["en", "Lively", "Sleepy", "Liveliness"], ["bold", "Bold", "Shy", "Boldness"], ["stub", "Stubborn", "Quick learner", "Stubbornness"], ["soc", "Clingy", "Independent", "Attachment"]];
+const r05 = v => Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
+function randTemper(r = Math.random){ const t = {}; TRAITS.forEach(([k]) => t[k] = r05(r())); return t; }
+function temperOf(g){ if (g && g.t) return g.t; let s = (((g && g.ps) || 7) * 7919 + 13) % 2147483647 || 7; return randTemper(() => (s = (s * 16807 + 11) % 2147483647) / 2147483647); }
+function mixTemper(A, B, r = Math.random){ const a = temperOf(A), b = temperOf(B), t = {}; TRAITS.forEach(([k]) => { const x = r(); let v = x < .4 ? a[k] : x < .8 ? b[k] : (a[k] + b[k]) / 2; if (r() < .12) v += (r() - .5) * .5; t[k] = r05(v); }); return t; }
+function temperWords(g){ const t = temperOf(g), w = TRAITS.map(([k, hi, lo]) => t[k] >= .7 ? hi : t[k] <= .3 ? lo : null).filter(Boolean); return w.length ? w.join(" · ") : "Even-tempered"; }
 function mixGenes(A, B, r = Math.random){
-  const g = {};
+  const g = {t: mixTemper(A, B, r)};
   for (const k of Object.keys(GENES)){ const x = r(), a = A[k] ?? pick(GENES[k], r), b = B[k] ?? pick(GENES[k], r); g[k] = x < .46 ? a : x < .92 ? b : pick(GENES[k], r); }
   if (A.kind == null) g.kind = r() < .5 ? (B.kind || "critter") : "critter";
   g.rbody = r() < .5 ? (A.rbody || "comet") : (B.rbody || "moth");
@@ -3550,7 +3610,7 @@ function treeSheet(id){
     <div class="fld"><span>${esc(me.name || PET_FORMS[me.form])}</span><div class="trow">${node(me)}</div></div>
     ${kids.length ? `<div class="fld"><span>Children</span><div class="trow">${kids.map(node).join("")}</div></div>` : ""}
     <div class="fld"><span>Genes</span><div class="sub">${me.genes ? geneText(me.genes) : "Classic"}</div>
-      ${me.genes ? `<div class="chips" style="margin-top:8px;align-items:center"><span class="swatch" style="--sw:${colorsOf(me.genes).c}"></span><span class="swatch" style="--sw:${colorsOf(me.genes).pc}"></span><span class="sub">${esc(colorsOf(me.genes).n)}</span></div>` : ""}</div>`, () => {}, null, "Close");
+      ${me.genes ? `<div class="chips" style="margin-top:8px;align-items:center"><span class="swatch" style="--sw:${colorsOf(me.genes).c}"></span><span class="swatch" style="--sw:${colorsOf(me.genes).pc}"></span><span class="sub">${esc(colorsOf(me.genes).n)}</span></div><div class="sub" style="margin-top:8px">${esc(temperWords(me.genes))}</div>` : ""}</div>`, () => {}, null, "Close");
 }
 function bookSheet(id){
   const e = bookGet(id); if (!e) return;
