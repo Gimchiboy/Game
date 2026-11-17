@@ -339,7 +339,8 @@ details.tv summary{font-size:12px;color:var(--muted);cursor:pointer;margin-top:8
 .th .nm{display:block;padding:8px 12px;font:500 11px var(--pix);letter-spacing:.12em;text-transform:uppercase;color:var(--shell-ink)}
 
 /* apps launcher */
-.apps{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}
+.apps{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}.apps.grp{margin-top:10px}
+.agi{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .tile{position:relative;text-align:left;display:flex;flex-direction:column;gap:4px;padding:16px 16px 14px;min-height:130px;
   background-color:var(--lcd);background-image:var(--card-img);color:var(--ink);border:var(--card-bw) solid var(--bezel);border-radius:var(--radius);box-shadow:var(--card-shadow)}
 .tile:active{transform:translateY(1px)}
@@ -978,6 +979,8 @@ const REORDER = {
   foods: ids => { setOrder(ids); render(); },
   repeats: ids => { setOrder(ids); render(); },
   tasks: ids => { setOrder(ids); render(); },
+  appgroups: ids => saveCfg({appGroups: ids.map(id => appGroups().find(g => g.id === id)).filter(Boolean)}),
+  apporder: ids => saveCfg({appOrder: ids}),
   eats: (ids, d) => { const es = eatsOf(d), moved = ids.map(id => es.find(e => e.id === id)).filter(Boolean); setDay(d, {eats: [...es.filter(e => !ids.includes(e.id)), ...moved]}); },
 };
 document.addEventListener("input", e => { const t = e.target;
@@ -1181,10 +1184,32 @@ function viewToday(){
 }
 
 /* ---------- Apps ---------- */
+let appsEdit = false;
+const appGroups = () => (items.settings || {}).appGroups || [];
+const appGroupOf = k => { const g = ((items.settings || {}).appGroup || {})[k]; return g && appGroups().some(x => x.id === g) ? g : ""; };
+const appsSorted = () => { const o = (items.settings || {}).appOrder || [], ix = k => { const i = o.indexOf(k); return i < 0 ? 999 + APPS.findIndex(a => a.k === k) : i; }; return APPS.slice().sort((a, b) => ix(a.k) - ix(b.k)); };
 function viewApps(){
-  return `<div class="kicker">Everything else</div><h1>Apps</h1>
-  <div class="apps">${APPS.map((a, i) => `<button class="tile" ${a.ext ? `data-open-html="bi-${a.k}"` : `data-go="${a.k}"`}><svg viewBox="0 0 24 24">${ICON[a.k]}</svg><span class="tn">${a.n}</span><span class="ts">${esc(a.stat())}</span></button>`).join("")}</div>`;
+  const gs = appGroups(), A = appsSorted();
+  const tile = a => `<button class="tile" ${a.ext ? `data-open-html="bi-${a.k}"` : `data-go="${a.k}"`}><svg viewBox="0 0 24 24">${ICON[a.k]}</svg><span class="tn">${a.n}</span><span class="ts">${esc(a.stat())}</span></button>`;
+  const head = `<div class="kicker">Everything else</div><div class="rowhead" style="align-items:flex-end"><h1 style="flex:1">Apps</h1><button class="btn ${appsEdit ? "pri" : ""}" data-ag="toggle">${appsEdit ? "Done" : "Organize"}</button></div>`;
+  if (appsEdit) return head + `
+  <h2>Groups</h2>
+  <div class="card">${gs.length ? `<div data-reorder="appgroups">${gs.map(g => `<div class="row" data-oid="${esc(g.id)}">${gs.length > 1 ? GRIP : ""}<input class="inl grow" data-ag-name="${esc(g.id)}" value="${esc(g.n)}" aria-label="Group name" maxlength="30"><button type="button" class="link" data-ag="del" data-id="${esc(g.id)}" aria-label="Delete group ${esc(g.n)}">Delete</button></div>`).join("")}</div>` : `<div class="empty">No groups yet.</div>`}</div>
+  <form class="quick" data-form="ag-new" style="margin-top:12px"><input id="ag-new" placeholder="New group…" autocomplete="off" maxlength="30" aria-label="New group name"><button class="btn pri">Add</button></form>
+  <h2>Apps</h2>
+  <div class="card" data-reorder="apporder">${A.map(a => `<div class="row" data-oid="${a.k}">${GRIP}<svg viewBox="0 0 24 24" class="agi">${ICON[a.k]}</svg><div class="grow t">${a.n}</div><select class="sel" data-ag-app="${a.k}" aria-label="Group for ${a.n}" ${gs.length ? "" : "disabled"}><option value="">No group</option>${gs.map(g => `<option value="${esc(g.id)}" ${appGroupOf(a.k) === g.id ? "selected" : ""}>${esc(g.n)}</option>`).join("")}</select></div>`).join("")}</div>`;
+  const secs = gs.map(g => [g.n, A.filter(a => appGroupOf(a.k) === g.id)]).filter(x => x[1].length), rest = A.filter(a => !appGroupOf(a.k));
+  if (!secs.length) return head + `<div class="apps">${A.map(tile).join("")}</div>`;
+  return head + secs.map(([n, L]) => `<h2>${esc(n)}</h2><div class="apps grp">${L.map(tile).join("")}</div>`).join("") + (rest.length ? `<h2>Other</h2><div class="apps grp">${rest.map(tile).join("")}</div>` : "");
 }
+document.addEventListener("click", e => { const b = e.target.closest("[data-ag]"); if (!b) return; const a = b.dataset.ag;
+  if (a === "toggle"){ appsEdit = !appsEdit; render(); }
+  else if (a === "del"){ const id = b.dataset.id, m = {...((items.settings || {}).appGroup || {})}; Object.keys(m).forEach(k => { if (m[k] === id) delete m[k]; }); saveCfg({appGroups: appGroups().filter(g => g.id !== id), appGroup: m}); } });
+document.addEventListener("change", e => { const t = e.target; if (!t.dataset) return;
+  if (t.dataset.agName){ const v = t.value.trim(); if (!v){ render(); return; } saveCfg({appGroups: appGroups().map(g => g.id === t.dataset.agName ? {...g, n: v} : g)}); }
+  if (t.dataset.agApp){ const m = {...((items.settings || {}).appGroup || {})}; if (t.value) m[t.dataset.agApp] = t.value; else delete m[t.dataset.agApp]; saveCfg({appGroup: m}); } });
+document.addEventListener("submit", e => { const f = e.target; if (!f.dataset || f.dataset.form !== "ag-new") return; e.preventDefault(); e.stopImmediatePropagation();
+  const v = f.querySelector("#ag-new").value.trim(); if (!v) return; saveCfg({appGroups: [...appGroups(), {id: uid(), n: v}]}); setTimeout(() => { const el = document.getElementById("ag-new"); if (el) el.focus(); }, 30); }, true);
 
 /* ---------- Tasks ---------- */
 function viewTasks(){
