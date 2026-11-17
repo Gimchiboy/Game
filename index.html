@@ -339,7 +339,12 @@ details.tv summary{font-size:12px;color:var(--muted);cursor:pointer;margin-top:8
 .th .nm{display:block;padding:8px 12px;font:500 11px var(--pix);letter-spacing:.12em;text-transform:uppercase;color:var(--shell-ink)}
 
 /* apps launcher */
-.apps{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}.apps.grp{margin-top:10px}
+.apps{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}
+.tile.folder .fmini{display:grid;grid-template-columns:repeat(2,22px);grid-auto-rows:22px;gap:6px;padding:8px;border-radius:12px;background:color-mix(in srgb,var(--ink) 7%,transparent);align-self:flex-start;margin:2px 0 auto;min-height:66px;box-sizing:border-box}
+.tile.folder .fmini svg{width:22px;height:22px;margin:0}
+.fscrim{display:flex;align-items:center;justify-content:center;padding:20px}
+.fpanel{width:100%;max-width:420px;max-height:80vh;overflow:auto;background-color:var(--sheet-bg);background-image:var(--page-img);color:var(--shell-ink);border:1px solid var(--nav-border);border-radius:22px;padding:18px 16px 16px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.fpanel h3{margin:0 4px 0;font-size:20px}.fpanel .apps{margin-top:14px}
 .agi{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .tile{position:relative;text-align:left;display:flex;flex-direction:column;gap:4px;padding:16px 16px 14px;min-height:130px;
   background-color:var(--lcd);background-image:var(--card-img);color:var(--ink);border:var(--card-bw) solid var(--bezel);border-radius:var(--radius);box-shadow:var(--card-shadow)}
@@ -1193,17 +1198,27 @@ function viewApps(){
   const tile = a => `<button class="tile" ${a.ext ? `data-open-html="bi-${a.k}"` : `data-go="${a.k}"`}><svg viewBox="0 0 24 24">${ICON[a.k]}</svg><span class="tn">${a.n}</span><span class="ts">${esc(a.stat())}</span></button>`;
   const head = `<div class="kicker">Everything else</div><div class="rowhead" style="align-items:flex-end"><h1 style="flex:1">Apps</h1><button class="btn ${appsEdit ? "pri" : ""}" data-ag="toggle">${appsEdit ? "Done" : "Organize"}</button></div>`;
   if (appsEdit) return head + `
-  <h2>Groups</h2>
-  <div class="card">${gs.length ? `<div data-reorder="appgroups">${gs.map(g => `<div class="row" data-oid="${esc(g.id)}">${gs.length > 1 ? GRIP : ""}<input class="inl grow" data-ag-name="${esc(g.id)}" value="${esc(g.n)}" aria-label="Group name" maxlength="30"><button type="button" class="link" data-ag="del" data-id="${esc(g.id)}" aria-label="Delete group ${esc(g.n)}">Delete</button></div>`).join("")}</div>` : `<div class="empty">No groups yet.</div>`}</div>
-  <form class="quick" data-form="ag-new" style="margin-top:12px"><input id="ag-new" placeholder="New group…" autocomplete="off" maxlength="30" aria-label="New group name"><button class="btn pri">Add</button></form>
+  <h2>Folders</h2>
+  <div class="card">${gs.length ? `<div data-reorder="appgroups">${gs.map(g => `<div class="row" data-oid="${esc(g.id)}">${gs.length > 1 ? GRIP : ""}<input class="inl grow" data-ag-name="${esc(g.id)}" value="${esc(g.n)}" aria-label="Folder name" maxlength="30"><button type="button" class="link" data-ag="del" data-id="${esc(g.id)}" aria-label="Delete folder ${esc(g.n)}">Delete</button></div>`).join("")}</div>` : `<div class="empty">No folders yet.</div>`}</div>
+  <form class="quick" data-form="ag-new" style="margin-top:12px"><input id="ag-new" placeholder="New folder…" autocomplete="off" maxlength="30" aria-label="New folder name"><button class="btn pri">Add</button></form>
   <h2>Apps</h2>
-  <div class="card" data-reorder="apporder">${A.map(a => `<div class="row" data-oid="${a.k}">${GRIP}<svg viewBox="0 0 24 24" class="agi">${ICON[a.k]}</svg><div class="grow t">${a.n}</div><select class="sel" data-ag-app="${a.k}" aria-label="Group for ${a.n}" ${gs.length ? "" : "disabled"}><option value="">No group</option>${gs.map(g => `<option value="${esc(g.id)}" ${appGroupOf(a.k) === g.id ? "selected" : ""}>${esc(g.n)}</option>`).join("")}</select></div>`).join("")}</div>`;
-  const secs = gs.map(g => [g.n, A.filter(a => appGroupOf(a.k) === g.id)]).filter(x => x[1].length), rest = A.filter(a => !appGroupOf(a.k));
-  if (!secs.length) return head + `<div class="apps">${A.map(tile).join("")}</div>`;
-  return head + secs.map(([n, L]) => `<h2>${esc(n)}</h2><div class="apps grp">${L.map(tile).join("")}</div>`).join("") + (rest.length ? `<h2>Other</h2><div class="apps grp">${rest.map(tile).join("")}</div>` : "");
+  <div class="card" data-reorder="apporder">${A.map(a => `<div class="row" data-oid="${a.k}">${GRIP}<svg viewBox="0 0 24 24" class="agi">${ICON[a.k]}</svg><div class="grow t">${a.n}</div><select class="sel" data-ag-app="${a.k}" aria-label="Folder for ${a.n}" ${gs.length ? "" : "disabled"}><option value="">No folder</option>${gs.map(g => `<option value="${esc(g.id)}" ${appGroupOf(a.k) === g.id ? "selected" : ""}>${esc(g.n)}</option>`).join("")}</select></div>`).join("")}</div>`;
+  const secs = gs.map(g => [g, A.filter(a => appGroupOf(a.k) === g.id)]).filter(x => x[1].length), rest = A.filter(a => !appGroupOf(a.k));
+  const folder = ([g, L]) => `<button class="tile folder" data-ag="open" data-id="${esc(g.id)}"><span class="fmini">${L.slice(0, 4).map(a => `<svg viewBox="0 0 24 24">${ICON[a.k]}</svg>`).join("")}</span><span class="tn">${esc(g.n)}</span><span class="ts">${L.length} app${L.length === 1 ? "" : "s"}</span></button>`;
+  return head + `<div class="apps">${secs.map(folder).join("")}${rest.map(tile).join("")}</div>`;
+}
+function openFolder(id){
+  const g = appGroups().find(x => x.id === id); if (!g) return;
+  const L = appsSorted().filter(a => appGroupOf(a.k) === id), Lr = $("#layer");
+  Lr.querySelectorAll(".scrim").forEach(x => x.remove());
+  const sc = document.createElement("div"); sc.className = "scrim fscrim";
+  sc.innerHTML = `<div class="fpanel" role="dialog" aria-label="${esc(g.n)}"><h3>${esc(g.n)}</h3><div class="apps">${L.map(a => `<button class="tile" ${a.ext ? `data-open-html="bi-${a.k}"` : `data-go="${a.k}"`}><svg viewBox="0 0 24 24">${ICON[a.k]}</svg><span class="tn">${a.n}</span><span class="ts">${esc(a.stat())}</span></button>`).join("")}</div></div>`;
+  sc.addEventListener("click", e => { if (e.target === sc || e.target.closest(".tile")) setTimeout(() => sc.remove(), 0); });
+  Lr.appendChild(sc);
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-ag]"); if (!b) return; const a = b.dataset.ag;
   if (a === "toggle"){ appsEdit = !appsEdit; render(); }
+  else if (a === "open") openFolder(b.dataset.id);
   else if (a === "del"){ const id = b.dataset.id, m = {...((items.settings || {}).appGroup || {})}; Object.keys(m).forEach(k => { if (m[k] === id) delete m[k]; }); saveCfg({appGroups: appGroups().filter(g => g.id !== id), appGroup: m}); } });
 document.addEventListener("change", e => { const t = e.target; if (!t.dataset) return;
   if (t.dataset.agName){ const v = t.value.trim(); if (!v){ render(); return; } saveCfg({appGroups: appGroups().map(g => g.id === t.dataset.agName ? {...g, n: v} : g)}); }
