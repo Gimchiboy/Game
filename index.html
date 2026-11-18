@@ -425,7 +425,10 @@ details > summary{list-style:none}details > summary::-webkit-details-marker{disp
 .pxpal{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.pxsw{width:34px;height:34px;border-radius:9px;background:var(--sw);border:2px solid var(--line);box-shadow:inset 0 0 0 2px var(--lcd)}.pxsw.on{border-color:var(--ink);transform:scale(1.08)}
 .pxsw.add{display:grid;place-items:center;background:var(--lcd);font-size:18px;cursor:pointer}
 .ivrow{display:flex;align-items:center;gap:8px}.ivrow input{flex:1;min-width:0}.ivrow .sub{flex:none}
-.wd.future{opacity:.35;cursor:default}
+.wd.ahead{opacity:.7}.wd.ahead.sel{opacity:1}.wd.now span:first-child{color:var(--shell-ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.wd .wn{font:500 13px var(--sans);letter-spacing:0;color:var(--shell-ink)}.wd .dot.busy{box-shadow:0 0 0 2px var(--shell-ink) inset}
+.weeknav{display:flex;align-items:center;justify-content:space-between;margin:6px 0 2px}
+.viewing{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:8px 12px;border-radius:10px;background:var(--shell-2);font-size:14px}
 
 .fld input.switch{width:44px;height:26px;padding:0;border:1.5px solid var(--shell-ink);background:var(--shell-3);border-radius:999px}
 .fld input.switch::after{background:var(--shell-ink)}
@@ -995,7 +998,7 @@ const REORDER = {
   eats: (ids, d) => { const es = eatsOf(d), moved = ids.map(id => es.find(e => e.id === id)).filter(Boolean); setDay(d, {eats: [...es.filter(e => !ids.includes(e.id)), ...moved]}); },
 };
 document.addEventListener("input", e => { const t = e.target;
-  if (t.dataset && "focus" in t.dataset){ const d = today(), dd = dayDoc(d), v = t.value; put("day-" + d, {...dd, kind:"day", date:d, focus: {...(dd.focus || {}), text: v, done: v.trim() ? !!(dd.focus || {}).done : false}}, {silent: true}); const cb = t.parentNode.querySelector("[data-focus-done]"); if (cb) cb.disabled = !v.trim(); return; }
+  if (t.dataset && "focus" in t.dataset){ const d = viewDay, dd = dayDoc(d), v = t.value; put("day-" + d, {...dd, kind:"day", date:d, focus: {...(dd.focus || {}), text: v, done: v.trim() ? !!(dd.focus || {}).done : false}}, {silent: true}); const cb = t.parentNode.querySelector("[data-focus-done]"); if (cb) cb.disabled = !v.trim(); return; }
   if (t.tagName === "INPUT" && (t.inputMode === "decimal" || t.inputMode === "numeric")){
     const v = t.value, w = v.replace(/,/g, ".").replace(t.inputMode === "numeric" ? /[^0-9]/g : /[^0-9.\-]/g, "").replace(/(?!^)-/g, "").replace(/(\..*)\./g, "$1");
     if (w !== v){ const pos = t.selectionStart - (v.length - w.length); t.value = w; try { t.setSelectionRange(pos, pos); } catch {} } } }, true);
@@ -1155,42 +1158,45 @@ function eventRow(e){
 function viewToday(){
   const t = today(), c = cfg(), hs = habitsOn(viewDay), dd = dayDoc(viewDay), done = dd.done || {};
   const sc = dayScore(viewDay), n = sc.n, meals = dd.meals || {}, sh = sleepHours(dd);
-  const sun = addDays(t, -parse(t).getDay()), week = []; for (let i = 0; i < 7; i++) week.push(addDays(sun, i));
+  const V = viewDay, fut = V > t, sun = addDays(V, -parse(V).getDay()), week = []; for (let i = 0; i < 7; i++) week.push(addDays(sun, i));
   const hr = new Date().getHours();
   const greet = hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
-  const od = overdue(), dueToday = tasksFor(t).sort((a,b)=> (a.done-b.done) || (a.time||"99").localeCompare(b.time||"99") || byOrder((x,y) => (x.created||0)-(y.created||0))(a,b)), evs = eventsFor(t);
+  const od = V === t ? overdue() : [], dueToday = tasksFor(V).sort((a,b)=> (a.done-b.done) || (a.time||"99").localeCompare(b.time||"99") || byOrder((x,y) => (x.created||0)-(y.created||0))(a,b)), evs = eventsFor(V);
   const s0 = dayScore(t), pc = s0.total ? Math.round(s0.n / s0.total * 100) : 0;
   const mealsDone = c.meals.list.filter(m => meals[m.id]).length;
   return `
   <div class="kicker">${greet}</div><h1>${esc(fmtDay(t))}</h1>
   <div class="dayline" title="Today's dailies"><div class="ln"><i style="width:${pc}%"></i></div><span>${pc}%</span></div>
-  ${(() => { const f = dayDoc(t).focus || {}; return `<div class="card focusbox ${f.done ? "done" : ""}"><div class="fk">Today's task</div><div class="frow"><input type="checkbox" class="chk" data-focus-done ${f.done ? "checked" : ""} ${f.text ? "" : "disabled"} aria-label="Done"><input class="finp" data-focus value="${esc(f.text || "")}" aria-label="Today's task" autocomplete="off" enterkeyhint="done"></div></div>`; })()}
+  ${V === t ? "" : `<div class="viewing"><span>Viewing <b>${esc(relDay(V))}</b></span><button class="link" data-viewday="${t}">Back to today</button></div>`}
+  ${(() => { const f = dayDoc(V).focus || {}; return `<div class="card focusbox ${f.done ? "done" : ""}"><div class="fk">${V === t ? "Today's task" : "Task for " + esc(relDay(V))}</div><div class="frow"><input type="checkbox" class="chk" data-focus-done ${f.done ? "checked" : ""} ${f.text && !fut ? "" : "disabled"} aria-label="Done"><input class="finp" data-focus value="${esc(f.text || "")}" aria-label="Task for the day" autocomplete="off" enterkeyhint="done"></div></div>`; })()}
   ${c.goals.on && activeGoals().length ? `<div class="gtiles">${activeGoals().map(g => { const p = Math.round(goalProg(g) * 100); return `<button class="gtile" data-goal-open="${g.id}" style="--cc:${catColor(g)}" aria-label="${esc(g.title)}, ${p}%"><span class="gw">${esc(shortName(g))}</span><span class="gbar"><i style="width:${p}%"></i></span><span class="gp">${p}%</span></button>`; }).join("")}</div>` : ""}
 
   ${viewDay === t ? petTodayRow() : ""}
   <h2>Daily checklist <span class="sp"></span><span class="sub" style="font-family:var(--sans)">${viewDay===t?"":esc(relDay(viewDay))+" · "}${n} of ${sc.total}</span></h2>
-  <div class="week">${week.map(d => { const f = dayFrac(d); return d > t ? `<span class="wd future"><span>${DOW[parse(d).getDay()].slice(0,1)}</span><span class="dot"></span></span>` : `<button class="wd ${d===viewDay?"sel":""}" data-viewday="${d}"><span>${DOW[parse(d).getDay()].slice(0,1)}</span><span class="dot"><i style="height:${Math.round(f*100)}%"></i></span></button>`; }).join("")}</div>
+  <div class="weeknav"><button class="link" data-viewday="${addDays(V, -7)}" aria-label="Previous week">‹ Week</button><span class="sub">${esc(fmtDay(week[0]).split(", ")[1])} – ${esc(fmtDay(week[6]).split(", ")[1])}</span><button class="link" data-viewday="${addDays(V, 7)}" aria-label="Next week">Week ›</button></div>
+  <div class="week">${week.map(d => { const f = d > t ? 0 : dayFrac(d), busy = d > t && (tasksFor(d).length || eventsFor(d).length); return `<button class="wd ${d===V?"sel":""} ${d===t?"now":""} ${d>t?"ahead":""}" data-viewday="${d}" aria-label="${esc(fmtDay(d))}"><span>${DOW[parse(d).getDay()].slice(0,1)}</span><span class="wn">${parse(d).getDate()}</span><span class="dot ${busy ? "busy" : ""}"><i style="height:${Math.round(f*100)}%"></i></span></button>`; }).join("")}</div>
   <div class="card" style="margin-top:10px">
     ${sc.total ? `<div class="prog"><i style="width:${Math.round(n/sc.total*100)}%"></i></div>` : ""}
-    ${c.water.on ? `<div class="row col">${waterBlock(dd)}</div>` : ""}
+    ${fut ? `<div class="row"><div class="m">Dailies can be ticked once the day arrives.</div></div>` : ""}
+    ${c.water.on && !fut ? `<div class="row col">${waterBlock(dd)}</div>` : ""}
     ${c.meals.on ? (() => { const pl = plannedFor(viewDay); if (!pl.length) return repeats().length ? "" : `<div class="row tap" data-go="food" data-foodtab-go="repeats"><input type="checkbox" class="chk" disabled aria-label="Food"><div class="grow"><div class="t">Food</div><div class="m">Set up foods you eat on set days</div></div><span class="sub">›</span></div>`;
       const done = pl.filter(r => eatenRepeat(viewDay, r.id)).length, kc = pl.reduce((a, r) => a + r.kcal * (r.qty || 1), 0);
       return `<div class="row ${done===pl.length?"done":""}"><input type="checkbox" class="chk" disabled ${done===pl.length?"checked":""} aria-label="All planned food eaten"><div class="grow"><div class="t">Food</div><div class="m">${done} of ${pl.length} · ${Math.round(kc).toLocaleString()} cal planned</div></div></div>${plannedRows(viewDay)}`; })() : ""}
-    ${c.sleep.on ? `<div class="row col"><div class="rowhead"><input type="checkbox" class="chk" disabled ${sh!=null?"checked":""} aria-label="Sleep logged"><div class="grow"><div class="t">Sleep</div><div class="m">${sh!=null?`${sh} hours · goal ${c.sleep.goal}`:"When you fell asleep and woke up"}</div></div></div>${sleepInputs(dd.sleep||{})}</div>` : ""}
-    ${hs.map(h => `<div class="row ${done[h.id]?"done":""}"><input type="checkbox" class="chk" data-habit="${h.id}" ${done[h.id]?"checked":""} aria-label="${esc(h.title)}"><div class="grow t">${esc(h.title)}</div></div>`).join("")}
+    ${c.sleep.on && !fut ? `<div class="row col"><div class="rowhead"><input type="checkbox" class="chk" disabled ${sh!=null?"checked":""} aria-label="Sleep logged"><div class="grow"><div class="t">Sleep</div><div class="m">${sh!=null?`${sh} hours · goal ${c.sleep.goal}`:"When you fell asleep and woke up"}</div></div></div>${sleepInputs(dd.sleep||{})}</div>` : ""}
+    ${hs.map(h => `<div class="row ${done[h.id]?"done":""}"><input type="checkbox" class="chk" data-habit="${h.id}" ${done[h.id]?"checked":""} ${fut ? "disabled" : ""} aria-label="${esc(h.title)}"><div class="grow t">${esc(h.title)}</div></div>`).join("")}
     ${!hs.length ? `<div class="empty" ${sc.total?'style="border-top:1px solid var(--line)"':""}>Add the habits you want to do every day.<div class="chips" style="margin-top:12px"><button class="btn sm" data-go="settings">Add habits</button></div></div>` : ""}
   </div>
-  ${c.journal.on ? `<h2>Journal<span class="sp"></span><button class="link" data-go="journal">All entries</button></h2>
+  ${c.journal.on && !fut ? `<h2>Journal<span class="sp"></span><button class="link" data-go="journal">All entries</button></h2>
   <div class="card journal">${(() => { const je = items["journal-"+viewDay]; return `<div class="jhead"><span class="jno" id="jno">Journal Entry #${pad3(je ? je.n : nextJournalNo())}</span><span class="jtime" id="jtime">${esc(jTimes(je))}</span></div>
     <textarea id="journal" placeholder="Write…">${esc(je ? je.body || "" : "")}</textarea>`; })()}</div>` : ""}
-  ${c.agenda.on ? `<h2>Schedule<span class="sp"></span><button class="link" data-act="new-event" data-date="${t}">+ Event</button></h2>
+  ${c.agenda.on ? `<h2>Schedule<span class="sp"></span><button class="link" data-act="new-event" data-date="${V}">+ Event</button></h2>
   <div class="card">${evs.length ? evs.map(eventRow).join("") : `<div class="empty">Nothing scheduled.</div>`}</div>
-  <h2>Due today<span class="sp"></span><button class="link" data-go="tasks">All tasks</button></h2>
+  <h2>${V === t ? "Due today" : "Due " + esc(relDay(V))}<span class="sp"></span><button class="link" data-go="tasks">All tasks</button></h2>
   <div class="card">
     ${od.length ? od.map(x => taskRow(x)).join("") : ""}
     ${dueToday.length ? dueToday.map(x => taskRow(x)).join("") : (od.length ? "" : `<div class="empty">Nothing due.</div>`)}
   </div>
-  <form class="quick" data-form="quick-today"><input id="q-today" placeholder="Add something for today…" autocomplete="off"><button class="btn pri">Add</button></form>` : ""}
+  <form class="quick" data-form="quick-today"><input id="q-today" placeholder="${V === t ? "Add something for today…" : "Add a task for " + esc(relDay(V)) + "…"}" autocomplete="off"><button class="btn pri">Add</button></form>` : ""}
   `;
 }
 
@@ -2172,7 +2178,7 @@ function restoreSheet(){
 function moveUp(list, id, save){ const i = list.findIndex(x => x.id === id); if (i < 1) return; list.splice(i-1, 0, list.splice(i,1)[0]); save(list); }
 document.addEventListener("change", e => {
   const el = e.target, c = cfg();
-  if ("focusDone" in el.dataset){ const d = today(), dd = dayDoc(d); setDay(d, {focus: {...(dd.focus || {}), done: el.checked}}); return; }
+  if ("focusDone" in el.dataset){ const d = viewDay, dd = dayDoc(d); setDay(d, {focus: {...(dd.focus || {}), done: el.checked}}); return; }
   if (el.dataset.habTitle){ const id = el.dataset.habTitle, v = el.value.trim(); if (v && items[id]) put(id, {...items[id], title: v}); return; }
   if (el.dataset.tagName){ const v = el.value.trim(); if (!v) return render(); saveCfg({tags: tags().map(t => t.id === el.dataset.tagName ? {...t, name: v} : t)}); return; }
   if (el.dataset.catColor){ saveCfg({catColors: {...((items.settings||{}).catColors || {}), [el.dataset.catColor]: Number(el.value)}}); return; }
@@ -4069,7 +4075,7 @@ document.addEventListener("submit", e => {
   if (f.dataset.form === "newhab"){ const max = Math.max(0, ...habitsList().map(h => h.order||0)); inp.value = ""; put(uid(), {kind:"habit", title, order:max+1, created:Date.now()}); const a = $("#new-hab"); if (a) a.focus(); return; }
   if (f.dataset.form === "newtag"){ const ts = tags(), cc = (items.settings||{}).catColors || {}; inp.value = ""; const used = [...ts.map(t => t.c), cc.work ?? 0, cc.life ?? 1]; let c = 0; while (used.includes(c) && c < 7) c++; const pc = $("#new-tag-col"); if (pc && pc.dataset.touched) c = +pc.value; saveCfg({tags: [...ts, {id: uid(), name: title, c, cat: ($("#new-tag-cat") || {}).value || "life"}]}); const a = $("#new-tag"); if (a) a.focus(); return; }
   if (f.dataset.form === "newmeal"){ const c = cfg(); inp.value = ""; saveCfg({mealsCfg: {...c.meals, list: [...c.meals.list, {id: uid(), name: title}]}}); const a = $("#new-meal"); if (a) a.focus(); return; }
-  let due = today();
+  let due = f.dataset.form === "quick-today" ? viewDay : today();
   if (f.dataset.form === "quick-task") due = quickDue === "today" ? today() : quickDue === "tomorrow" ? addDays(today(),1) : null;
   inp.value = "";
   put(uid(), {kind:"task", title, due, time:null, notes:"", cat: f.dataset.form === "quick-task" ? defCat() : "life", tags: [], done:false, created:Date.now()});
