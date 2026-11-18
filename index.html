@@ -516,6 +516,12 @@ details > summary{list-style:none}details > summary::-webkit-details-marker{disp
 .focusbox .finp{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;font-size:19px;font-weight:600;padding:4px 0;outline:none;border-bottom:1px solid var(--line)}
 .focusbox .finp:focus{border-bottom-color:var(--ink)}
 .focusbox.done .finp{text-decoration:line-through;opacity:.55;border-bottom-color:transparent}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.duo .card{margin:0}
+.petc,.wxc{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;text-align:left;font:inherit;color:inherit;width:100%;min-height:150px;cursor:pointer}
+.petc .t,.wxc .t{font-weight:600}.petc .m,.wxc .m{font-size:13px;color:var(--muted)}
+.petmini.big{width:64px;max-height:64px;margin-bottom:auto}
+.wxtop{display:flex;align-items:center;gap:10px;margin-bottom:auto}.wxi{width:40px;height:40px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.wxt{font-size:34px;font-weight:600;line-height:1}.wxl{font-size:12px;color:var(--muted);margin-top:2px}
 </style>
 </head>
 <body>
@@ -2122,6 +2128,8 @@ function viewSettings(){
     <form class="row" data-form="newhab"><input class="inl" id="new-hab" placeholder="Add a habit…" autocomplete="off"><button class="btn sm">Add</button></form>
   </div>
 
+  ${wxSettings()}
+
   <h2>Food search</h2>
   <div class="card">
     <div class="row"><div class="grow"><div class="t">USDA key (optional)</div><div class="m">Search works without one. A free key from api.data.gov raises the hourly limit.</div></div></div>
@@ -2881,14 +2889,80 @@ document.addEventListener("click", e => { const b = e.target.closest("[data-pet-
   if (a === "store") storePet(); else if (a === "pair") pairSheet("current"); else if (a === "tree") treeSheet(e0id(P)); });
 const petVis = P => P ? JSON.stringify([P.act && P.act.at, P.act && P.act.fb, P.hunger, P.happy, !!P.call, P.asleep, !!P.dead, P.stage, P.form, P.poops, P.sick, P.lights, P.paused]) : "";
 function petRender(){ if (app === "pet") render(); }
+/* ---------- Weather (optional; only the place's rounded coordinates are sent) ---------- */
+const WX_KEY = "base-weather";
+const wxCfg = () => (items.settings || {}).weather || null;
+const wxKeyOf = c => `${c.lat},${c.lon},${c.unit || "F"}`;
+function wxCache(){ try { const w = JSON.parse(localStorage.getItem(WX_KEY) || "null"), c = wxCfg(); return w && c && w.k === wxKeyOf(c) ? w : null; } catch { return null; } }
+let wxBusy = false, wxFailAt = 0, wxFind = null;
+async function wxRefresh(force){
+  const c = wxCfg(); if (!c || wxBusy) return; const w = wxCache();
+  if (!force && ((w && Date.now() - w.at < 30 * MIN) || Date.now() - wxFailAt < 5 * MIN)) return;
+  wxBusy = true;
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=temperature_2m,apparent_temperature,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=${c.unit === "C" ? "celsius" : "fahrenheit"}&timezone=auto&forecast_days=1`);
+    if (!r.ok) throw 0; const j = await r.json(), cu = j.current || {}, d = j.daily || {}, n = v => typeof v === "number" ? v : null;
+    if (n(cu.temperature_2m) === null) throw 0;
+    localStorage.setItem(WX_KEY, JSON.stringify({k: wxKeyOf(c), at: Date.now(), t: cu.temperature_2m, feel: n(cu.apparent_temperature), code: n(cu.weather_code), day: cu.is_day !== 0, hi: n((d.temperature_2m_max || [])[0]), lo: n((d.temperature_2m_min || [])[0]), rain: n((d.precipitation_probability_max || [])[0])}));
+    wxFailAt = 0;
+  } catch { wxFailAt = Date.now(); if (force) toast("Couldn't reach the weather service."); }
+  wxBusy = false; if (tab === "today" || tab === "settings") render();
+}
+const WX_ICON = {
+  sun: `<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.500M2.5 12H5M19 12h2.500M5.3 5.300l1.8 1.800M16.9 16.900l1.8 1.800M5.3 18.700l1.8-1.800M16.9 7.100l1.8-1.8"/>`,
+  moon: `<path d="M19.5 14.500A8 8 0 0 1 9.5 4.500a8 8 0 1 0 10 10z"/>`,
+  part: `<circle cx="8" cy="8" r="3"/><path d="M8 2v1.500M2 8h1.500M3.8 3.800l1 1M12.2 3.800l-1 1"/><path d="M8.5 19.500h9a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.6 1.300A3 3 0 0 0 8.5 19.500z"/>`,
+  cloud: `<path d="M7 18.500h10.500a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.500A3.3 3.3 0 0 0 7 18.500z"/>`,
+  fog: `<path d="M7 13.500h10.500a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.500A3.3 3.3 0 0 0 7 13.500z"/><path d="M4 17h16M6 20.500h12"/>`,
+  rain: `<path d="M7 14.500h10.500a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.500A3.3 3.3 0 0 0 7 14.500z"/><path d="M8.5 17.500l-1 3M12.5 17.500l-1 3M16.5 17.500l-1 3"/>`,
+  snow: `<path d="M7 14.500h10.500a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.500A3.3 3.3 0 0 0 7 14.500z"/><path d="M8 18.500v.01M12 18.500v.01M16 18.500v.01M10 21v.01M14 21v.01" stroke-width="2.2"/>`,
+  storm: `<path d="M7 14.500h10.500a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.500A3.3 3.3 0 0 0 7 14.500z"/><path d="M12.5 15.500l-2.5 3.500h3l-2 3"/>`,
+};
+function wxLook(code, day){
+  const c = code ?? -1;
+  if (c === 0) return [day ? "sun" : "moon", "Clear"]; if (c === 1) return [day ? "sun" : "moon", "Mostly clear"]; if (c === 2) return ["part", "Partly cloudy"]; if (c === 3) return ["cloud", "Cloudy"];
+  if (c === 45 || c === 48) return ["fog", "Fog"]; if (c >= 51 && c <= 57) return ["rain", "Drizzle"]; if (c >= 61 && c <= 67) return ["rain", "Rain"]; if (c >= 71 && c <= 77) return ["snow", "Snow"];
+  if (c >= 80 && c <= 82) return ["rain", "Showers"]; if (c === 85 || c === 86) return ["snow", "Snow showers"]; if (c >= 95) return ["storm", "Thunderstorm"]; return ["cloud", ""];
+}
+function wxCard(){
+  const c = wxCfg(); if (!c) return ""; wxRefresh();
+  const w = wxCache(), dg = v => v === null || v === undefined ? "–" : Math.round(v) + "°";
+  if (!w) return `<button class="card wxc" data-wx="refresh"><div class="wxl">${esc(c.name)}</div><div class="m">${wxBusy ? "Loading…" : "No weather yet. Tap to try again"}</div></button>`;
+  const [ic, label] = wxLook(w.code, w.day), old = Date.now() - w.at > 2 * HOUR;
+  return `<button class="card wxc" data-wx="refresh" aria-label="Weather for ${esc(c.name)}. Tap to refresh"><div class="wxtop"><svg viewBox="0 0 24 24" class="wxi">${WX_ICON[ic]}</svg><span class="wxt">${dg(w.t)}</span></div>
+    <div class="t">${esc(label)}</div><div class="m">High ${dg(w.hi)} · Low ${dg(w.lo)}${w.rain !== null ? ` · Rain ${Math.round(w.rain)}%` : ""}</div><div class="wxl">${esc(c.name)}${old ? ` · ${fmtAgo(w.at)}` : ""}</div></button>`;
+}
+const fmtAgo = at => { const m = Math.floor((Date.now() - at) / MIN); return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.floor(m / 60)} h ago` : `${Math.floor(m / 1440)} d ago`; };
 function petTodayRow(){
-  const P = petNow(); if (!P || !petCfg().on) return "";
+  const P = petNow(), wx = wxCard();
+  if (!P || !petCfg().on) return wx ? `<div style="margin-top:14px">${wx}</div>` : "";
   const call = P.call && (P.call.type !== "lights" || P.lights) && !P.dead;
   const st = P.dead ? "Passed away" : P.paused ? "Paused" : P.stage === "egg" ? "Hatching" : P.asleep ? "Asleep" : `<span class="phs">${hearts(P.hunger)}</span> <span class="phs">${hearts(P.happy)}</span>`;
+  if (wx) return `<div class="duo"><button class="card petc" data-go="pet">${petMini(P, "petmini big")}<div class="t">${esc(P.name || PET_FORMS[P.form])}</div>${call ? `<div><span class="tag warn">Needs you</span></div>` : ""}<div class="m">${st}</div></button>${wx}</div>`;
   return `<div class="card" style="margin-top:14px"><div class="row tap" data-go="pet">
     ${petMini(P)}
     <div class="grow"><div class="t">${esc(P.name || PET_FORMS[P.form])}${call ? ` <span class="tag warn">Needs you</span>` : ""}</div><div class="m">${st}</div></div><span class="sub">›</span></div></div>`;
 }
+function wxSettings(){
+  const c = wxCfg();
+  return `<h2>Weather</h2>
+  <div class="card">
+    ${c ? `<div class="row"><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">Shown on Today</div></div><button type="button" class="link" data-wx="off">Remove</button></div>
+    <div class="row"><div class="grow t">Units</div><div class="seg" style="width:auto"><button type="button" data-wx="unit" data-val="F" class="${c.unit === "C" ? "" : "on"}">°F</button><button type="button" data-wx="unit" data-val="C" class="${c.unit === "C" ? "on" : ""}">°C</button></div></div>` : `<div class="row"><div class="grow"><div class="t">Off</div><div class="m">Pick a place to show its weather on Today</div></div></div>`}
+    <form class="row" data-form="wx-find" style="gap:8px"><input class="inl grow" id="wx-q" placeholder="City or town" autocomplete="off" aria-label="City or town"><button class="btn">Search</button></form>
+    ${wxFind === "busy" ? `<div class="row"><div class="m">Searching…</div></div>` : wxFind === "fail" ? `<div class="row"><div class="m">Couldn't reach the weather service.</div></div>` : Array.isArray(wxFind) ? (wxFind.length ? wxFind.map((r, i) => `<div class="row tap" data-wx="pick" data-i="${i}"><div class="grow"><div class="t">${esc(r.name)}</div><div class="m">${esc([r.admin1, r.country].filter(Boolean).join(", "))}</div></div><span class="sub">›</span></div>`).join("") : `<div class="row"><div class="m">No place found with that name.</div></div>`) : ""}
+  </div>
+  <div class="sub" style="margin-top:8px">Weather comes from Open-Meteo. Only the place name you search and that place's rounded coordinates are sent, nothing else from Base. Your phone's location is never read.</div>`;
+}
+document.addEventListener("submit", async e => { const f = e.target; if (!f.dataset || f.dataset.form !== "wx-find") return; e.preventDefault(); e.stopImmediatePropagation();
+  const q = f.querySelector("#wx-q").value.trim(); if (q.length < 2) return; wxFind = "busy"; render();
+  try { const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`); if (!r.ok) throw 0; const j = await r.json(); wxFind = (j.results || []).filter(x => typeof x.latitude === "number").map(x => ({name: x.name, admin1: x.admin1, country: x.country, lat: Math.round(x.latitude * 100) / 100, lon: Math.round(x.longitude * 100) / 100})); }
+  catch { wxFind = "fail"; } render(); }, true);
+document.addEventListener("click", e => { const b = e.target.closest("[data-wx]"); if (!b) return; const a = b.dataset.wx, c = wxCfg();
+  if (a === "refresh"){ const w = wxCache(); if (w && Date.now() - w.at < 2 * MIN) return toast("Weather is up to date."); wxRefresh(true); render(); }
+  else if (a === "off"){ localStorage.removeItem(WX_KEY); saveCfg({weather: null}); }
+  else if (a === "unit" && c){ saveCfg({weather: {...c, unit: b.dataset.val}}); }
+  else if (a === "pick" && Array.isArray(wxFind)){ const r = wxFind[+b.dataset.i]; if (!r) return; wxFind = null; saveCfg({weather: {name: r.name, lat: r.lat, lon: r.lon, unit: (c && c.unit) || "F"}}); } });
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-pet]"); if (!b || b.tagName === "INPUT") return;
   const a = b.dataset.pet;
